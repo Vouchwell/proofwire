@@ -29,7 +29,7 @@ commit that breaks it goes red.
 
 ## Using it
 
-The [website](https://vouchwell.github.io/vouchwell/#witness-keys) shows this
+The [website](https://vouchwell.axonscape.com/#witness-keys) shows this
 record too — copied in when the site deploys, never kept as a second file —
 and its browser verifier can pin these keys in one click. Neither is the trust
 anchor: the site is served by Vouchwell. This file's history is.

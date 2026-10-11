@@ -19,7 +19,7 @@ here (see "After the rename" below).
   so the link in [`SECURITY.md`](../SECURITY.md) works.
 - 0.2.0, 0.3.0 and 0.5.0 were published under the old names, from tagged
   commits, each with a GitHub release carrying its `CHANGELOG.md` section.
-- The website is live at <https://vouchwell.github.io/vouchwell/>. It is static files in `site/`, deployed by
+- The website is live at <https://vouchwell.axonscape.com/>. It is static files in `site/`, deployed by
   `.github/workflows/pages.yml`; the site's own tests gate the deploy and
   `site/test/` is not published.
 - CI runs the full suite on Linux, macOS and Windows, on Node 22 LTS and 24,
@@ -164,33 +164,42 @@ Then the things that are not automatable and are worth doing deliberately:
 
 ## The website's address
 
-The repository is `github.com/vouchwell/vouchwell` and the site is at
-<https://vouchwell.github.io/vouchwell/>. Every path on the site is relative, so
-it works under any prefix or at a root; moving it changes where it is served
-from, not the site.
+The site is at <https://vouchwell.axonscape.com/>. It is still built and
+deployed by `.github/workflows/pages.yml`, only now under that domain rather than a
+`github.io` address. Every path on the site is relative, so the move changed
+where it is served from, not the site. `index.html` names the domain as its
+canonical address, and `site/test` holds it to that.
 
-The bare hostname, <https://vouchwell.github.io/>, is served by a separate
-one-file repository, `vouchwell/vouchwell.github.io`, that does nothing but
-redirect to `/vouchwell/`. GitHub serves a hostname's root only from a repository
-of exactly that name, and keeping the site's source in one place is worth more
-than one fewer path segment. If you would rather the site *be* at the root,
-rename this repository to `vouchwell.github.io` (that name then appears in every
-source link) and delete the redirect repository.
+Setting the domain up takes two account actions, which CI cannot do:
+
+1. **DNS**, at whoever serves `axonscape.com`: a `CNAME` record named
+   `vouchwell` pointing to `proofwire.github.io` (the organisation's
+   `github.io` host; after a rename to `vouchwell`, to `vouchwell.github.io`).
+   Remove any `A` or `AAAA` record for `vouchwell`, which would conflict.
+2. **GitHub**:
+   - Settings → Pages → Custom domain → `vouchwell.axonscape.com` → Save.
+     With a workflow deploy GitHub ignores a `CNAME` file, so the setting is
+     the only place the domain lives.
+   - Once the DNS check passes, tick **Enforce HTTPS**.
+   - Then, in the organisation's Settings → Pages, **verify** `axonscape.com`.
+     A verified domain cannot be claimed by another GitHub account if this
+     site's setting is ever removed, which closes the subdomain-takeover gap.
+
+When the domain is set, GitHub redirects the old project address
+(`…github.io/proofwire/`) to it. The bare hostname is served by the one-file
+redirect repository `proofwire.github.io`, which sends it to the same place.
 
 The repository was transferred from a personal account, which left three things
 worth knowing:
 
 - GitHub redirects the old repository and `git` URLs. It does not redirect the
-  old `github.io` address, which now returns 404.
+  old personal `github.io` address, which now returns 404.
 - `repository` in each `package.json` already names this repository, so the
   first publish carries the right value. The site's npm check compares it with
   `GITHUB_REPOSITORY`; a package published under the old owner's URL would,
   correctly, not be advertised.
 - Pages, private vulnerability reporting, the homepage and the topics all
   survived the transfer; that was checked, not assumed.
-
-A custom domain later is Settings → Pages → Custom domain; nothing in the site
-needs to change.
 
 ## After the rename
 
@@ -200,7 +209,8 @@ Once, in this order. Each is an account action, so none can be done from CI.
    (Settings → Rename organization), then the repository `proofwire` to
    `vouchwell`, and `proofwire.github.io` to `vouchwell.github.io`. GitHub
    redirects the old repository URLs, so existing clones and links keep
-   working; the website moves to <https://vouchwell.github.io/vouchwell/>.
+   working. The website stays at <https://vouchwell.axonscape.com/>; update the DNS record's target
+   to `vouchwell.github.io`.
 2. **npm.** Create the org `vouchwell` (https://www.npmjs.com/org/create), so
    the `@vouchwell/*` packages have somewhere to publish.
 3. **Release.** Bump to the next version and publish as in Path 1 or 2. It is

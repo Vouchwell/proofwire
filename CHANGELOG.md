@@ -110,6 +110,11 @@ Fixes from the pre-launch security audit. Each has a regression test
 
 ### Changed
 
+- **The website moved to <https://vouchwell.axonscape.com/>.** It is still
+  deployed by the same tested workflow; only the address changed. The old
+  `github.io` addresses redirect there. Setup steps are in
+  [`docs/PUBLISHING.md`](docs/PUBLISHING.md#the-websites-address).
+
 - **`--config` naming a missing file is an error.** It used to fall back to
   the defaults silently, so a hook pointed at a config that had been moved
   started a new log in whatever folder it ran in. `vw hook` now refuses the
