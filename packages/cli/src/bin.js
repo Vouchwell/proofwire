@@ -9,7 +9,7 @@ import { cmdReport } from './report.js';
 import { cmdPolicyTemplates, cmdPolicyTemplate, templatePolicyText } from './policy-templates.js';
 import { RemoteSink, hubApprover, fetchPolicy } from '@vouchwell/proxy/remote';
 import { approverFrom } from '@vouchwell/proxy/approve';
-import { c, out, err, ok, bad, warn, info, heading, kv, table, outcomeBadge, parseArgs } from './ui.js';
+import { c, plain, out, err, ok, bad, warn, info, heading, kv, table, outcomeBadge, parseArgs } from './ui.js';
 import { witnessKeysFrom } from './witness-keys.js';
 import { LOG_DIR, CONFIG_FILE, POLICY_FILE } from './legacy-paths.js';
 import { cmdWitnesses, cmdStreams } from './hub-integrations.js';
@@ -295,7 +295,7 @@ async function cmdProxy(args) {
     );
   }
   proxy.on('denied', ({ target, decision }) => {
-    err(`${c.red('blocked')} ${target} — ${decision.reason}`);
+    err(`${c.red('blocked')} ${plain(target)} — ${plain(decision.reason)}`);
   });
   proxy.on('monitored', ({ target, wouldBe, reason }) => {
     err(`${c.yellow(`would ${wouldBe}`)} ${target} — ${reason}`);
@@ -483,17 +483,17 @@ function cmdLog(args) {
       c.grey(String(r.seq)),
       r.ts.slice(11, 19),
       r.decision.wouldBe ? c.yellow(`would ${r.decision.wouldBe}`) : outcomeBadge(r.decision.outcome),
-      r.action.target,
-      c.grey(r.actor.principal),
+      plain(r.action.target),
+      c.grey(plain(r.actor.principal)),
       r.decision.outcome === 'allow' && !(r.decision.wouldBe && !r.result)
         ? c.grey(
             r.result
-              ? `${r.result.status}${r.result.latencyMs !== undefined ? ` ${r.result.latencyMs}ms` : ''}`
+              ? `${plain(r.result.status)}${r.result.latencyMs !== undefined ? ` ${r.result.latencyMs}ms` : ''}`
               // An intent receipt is the record that the call was authorised
               // and sent, written before the reply could exist.
               : 'committed, awaiting result',
           )
-        : c.yellow(r.decision.reason.slice(0, 60)),
+        : c.yellow(plain(r.decision.reason.slice(0, 60))),
     ]),
   );
   out('');
@@ -617,10 +617,10 @@ function cmdProve(args) {
   const r = log.entries[seq];
   heading(`Inclusion proof · entry ${seq}`);
   kv([
-    ['tool', r.action.target],
+    ['tool', plain(r.action.target)],
     ['outcome', outcomeBadge(r.decision.outcome)],
     ['when', r.ts],
-    ['principal', r.actor.principal],
+    ['principal', plain(r.actor.principal)],
     ['leaf', proof.leaf],
     ['root', proof.root],
     ['tree size', String(proof.treeSize)],

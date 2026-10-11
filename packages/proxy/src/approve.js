@@ -43,6 +43,18 @@ export function denyingApprover() {
 }
 
 /**
+ * A string made safe to show at the prompt: control characters as escapes.
+ * The tool name comes from the tool server, and an escape sequence in it
+ * could repaint the prompt so a person approves something other than what
+ * they read.
+ *
+ * @param {unknown} s
+ */
+export function plain(s) {
+  return String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
+/**
  * Ask a human at the terminal.
  *
  * Reads from the controlling TTY rather than stdin, because stdin is the MCP
@@ -78,10 +90,10 @@ export function ttyApprover(opts = {}) {
 
     out.write('\n');
     out.write('  ┌─ Vouchwell: approval required ' + '─'.repeat(28) + '\n');
-    out.write(`  │ tool     ${req.target}\n`);
-    out.write(`  │ for      ${req.actor.principal}\n`);
-    out.write(`  │ reason   ${req.reason}\n`);
-    out.write(`  │ rules    ${req.rules.join(', ') || '—'}\n`);
+    out.write(`  │ tool     ${plain(req.target)}\n`);
+    out.write(`  │ for      ${plain(req.actor.principal)}\n`);
+    out.write(`  │ reason   ${plain(req.reason)}\n`);
+    out.write(`  │ rules    ${plain(req.rules.join(', ')) || '—'}\n`);
     const preview = JSON.stringify(req.params);
     out.write(`  │ args     ${preview.length > 160 ? preview.slice(0, 157) + '…' : preview}\n`);
     out.write('  └' + '─'.repeat(58) + '\n');
@@ -126,6 +138,8 @@ export function webhookApprover(opts) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(opts.url, {
+        // Credentials go to this address only: a redirect could carry them elsewhere.
+        redirect: 'error',
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(opts.headers ?? {}) },
         body: JSON.stringify(req),

@@ -357,7 +357,9 @@ export class Store {
           receipt.actor.agent,
           receipt.actor.session,
           receipt.result?.status ?? null,
-          receipt.result?.latencyMs ?? null,
+          // A column the console renders: only ever a number. The receipt, signed
+          // as sent, keeps whatever the agent wrote.
+          Number.isFinite(receipt.result?.latencyMs) ? receipt.result.latencyMs : null,
           canonicalize(receipt.action.metrics ?? {}),
           canonicalize(receipt),
           receivedAt,
@@ -431,8 +433,8 @@ export class Store {
       .prepare(`SELECT count(*) AS n FROM receipts WHERE ${clause}`)
       .get(...params).n;
 
-    const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 500);
-    const offset = Math.max(Number(q.offset ?? 0), 0);
+    const limit = Math.min(Math.max(Math.trunc(Number(q.limit ?? 50)) || 50, 1), 500);
+    const offset = Math.max(Math.trunc(Number(q.offset ?? 0)) || 0, 0);
 
     const entries = this.db
       .prepare(

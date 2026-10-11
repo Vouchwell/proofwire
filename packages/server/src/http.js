@@ -76,7 +76,12 @@ export class Router {
       for (let i = 0; i < parts.length; i++) {
         const seg = route.parts[i];
         if (seg.startsWith(':')) {
-          params[seg.slice(1)] = decodeURIComponent(parts[i]);
+          try {
+            params[seg.slice(1)] = decodeURIComponent(parts[i]);
+          } catch {
+            // A malformed %-escape is the client's mistake, not a 500.
+            throw new StoreError(400, 'malformed_path', 'the path has an invalid %-escape');
+          }
         } else if (seg !== parts[i]) {
           ok = false;
           break;

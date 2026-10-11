@@ -32,6 +32,9 @@ export const SCOPES = /** @type {const} */ ([
   'approvals:write',  // resolve an escalation
   'witness:sign',     // counter-sign a checkpoint
   'admin',            // members, keys, org settings
+  // Choose the sign-in provider. Owners only: whoever picks the provider can
+  // sign in as any member, owners included, so it is not an admin's to give.
+  'sso:write',
 ]);
 
 /**
@@ -274,6 +277,17 @@ export class Auth {
       throw new StoreError(400, 'bad_scope', `unknown scope(s): ${bad.join(', ')}`);
     }
 
+    // Expiry is compared as an ISO string, so anything else would sort after
+    // every real date ("tomorrow", "2026-1-1") and the key would never expire.
+    let expiresAt = null;
+    if (args.expiresAt != null && args.expiresAt !== '') {
+      const at = new Date(String(args.expiresAt));
+      if (Number.isNaN(at.getTime())) {
+        throw new StoreError(400, 'bad_expiry', 'expiresAt must be a date, like 2027-01-31 or 2027-01-31T12:00:00Z');
+      }
+      expiresAt = at.toISOString();
+    }
+
     const id = newId('key');
     const secret = randomBytes(24).toString('base64url');
     // The id travels in the token so a lookup is a primary-key hit rather than
@@ -287,7 +301,7 @@ export class Auth {
       )
       .run(
         id, args.orgId, args.name, hashSecret(secret), JSON.stringify(args.scopes),
-        args.logId ?? null, now(), args.createdBy ?? null, args.expiresAt ?? null,
+        args.logId ?? null, now(), args.createdBy ?? null, expiresAt,
       );
 
     return { id, token, scopes: args.scopes, logId: args.logId ?? null };

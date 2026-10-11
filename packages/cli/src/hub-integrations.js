@@ -18,6 +18,8 @@ function caller(args, base) {
   const remote = resolveRemote(args);
   return async (/** @type {string} */ method, /** @type {string} */ p, /** @type {any} */ body) => {
     const res = await fetch(`${remote.url}${base}${p}`, {
+      // Credentials go to this address only: a redirect could carry them elsewhere.
+      redirect: 'error',
       method,
       headers: { authorization: `Bearer ${remote.token}`, 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),

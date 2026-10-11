@@ -79,5 +79,9 @@ test("the tests' documented fake keys pass, and a real-looking neighbour does no
 test('oversized files are refused, and binaries are not scanned as text', () => {
   const big = problemsIn({ 'dump.json': Buffer.alloc(1024 * 1024 + 1, 0x20) });
   assert.match(big[0], /over 1 MB/);
+  // An evidence bundle grows with the record, so it gets more room, not unlimited.
+  assert.deepEqual(problemsIn({ 'evidence/lg_x.json': Buffer.alloc(2 * 1024 * 1024, 0x20) }), []);
+  assert.match(problemsIn({ 'evidence/lg_x.json': Buffer.alloc(16 * 1024 * 1024 + 1, 0x20) })[0], /over 16 MB/);
+  assert.match(problemsIn({ 'evidence/nested/x.json': Buffer.alloc(1024 * 1024 + 1, 0x20) })[0], /over 1 MB/);
   assert.deepEqual(problemsIn({ 'site/fonts/x.woff2': Buffer.from(PEM) }), []);
 });

@@ -134,6 +134,8 @@ export async function cmdRemote(args) {
     let who;
     try {
       const res = await fetch(trimSlashes(String(args.url)) + '/v1/me', {
+        // Credentials go to this address only: a redirect could carry them elsewhere.
+        redirect: 'error',
         headers: { authorization: `Bearer ${args.token}` },
         signal: AbortSignal.timeout(15_000),
       });
@@ -260,6 +262,7 @@ export async function cmdRemoteVerify(args) {
 
   const get = async (p) => {
     const res = await fetch(`${remote.url}${p}`, {
+      redirect: 'error',
       headers: { authorization: `Bearer ${remote.token}` },
       signal: AbortSignal.timeout(60_000),
     });
@@ -340,6 +343,7 @@ export async function cmdPolicy(args) {
     }
 
     const res = await fetch(`${remote.url}/v1/policies/${encodeURIComponent(slug)}`, {
+      redirect: 'error',
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -385,7 +389,7 @@ export async function cmdPolicy(args) {
   }
 
   if (action === 'list') {
-    const res = await fetch(`${remote.url}/v1/policies`, { headers });
+    const res = await fetch(`${remote.url}/v1/policies`, { headers, redirect: 'error' });
     const body = await res.json();
     if (!res.ok) {
       bad(body.error?.message ?? `HTTP ${res.status}`);
@@ -546,6 +550,7 @@ export async function cmdSlack(args) {
   const remote = resolveRemote(args);
   const call = async (/** @type {string} */ method, /** @type {string} */ p, /** @type {any} */ body) => {
     const res = await fetch(`${remote.url}/v1/integrations/slack${p}`, {
+      redirect: 'error',
       method,
       headers: { authorization: `Bearer ${remote.token}`, 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),

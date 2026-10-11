@@ -180,11 +180,12 @@ export function createServer(opts) {
     if (!hosts.has(String(req.headers.host ?? '').toLowerCase())) {
       return json(res, 403, { error: 'unexpected Host header' });
     }
-    const url = new URL(req.url ?? '/', `http://${host}`);
-
     if (req.method !== 'GET') return json(res, 405, { error: 'read-only' });
 
     try {
+      // Inside the try: a malformed request target makes this throw, and a
+      // throw from a request handler would end the process.
+      const url = new URL(req.url ?? '/', 'http://dashboard.invalid');
       if (url.pathname === '/api/log') {
         // Reopened per request: the proxy is appending to this file while we
         // watch, and a cached handle would show a stale tree.

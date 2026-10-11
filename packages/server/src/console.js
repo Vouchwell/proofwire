@@ -516,7 +516,7 @@ function logPage(hub, ctx) {
       : entries.map((e) => {
           const body = JSON.parse(e.body);
           return `<tr>
-            <td class="mono dim">${e.seq}</td>
+            <td class="mono dim">${esc(e.seq)}</td>
             <td class="dim mono">${esc(e.ts.slice(5, 19).replace('T', ' '))}</td>
             <td>${body.decision.wouldBe
               ? `<span class="pill escalate" title="monitor mode: ran, not enforced">would ${esc(body.decision.wouldBe)}</span>`
@@ -525,7 +525,7 @@ function logPage(hub, ctx) {
             <td class="dim mono">${esc(e.phase)}</td>
             <td class="dim">${esc(e.principal)}</td>
             <td>${e.outcome === 'allow' && !body.decision.wouldBe
-              ? `<span class="dim">${esc(e.status ?? 'committed')}${e.latency_ms != null ? ` · ${e.latency_ms}ms` : ''}</span>`
+              ? `<span class="dim">${esc(e.status ?? 'committed')}${e.latency_ms != null ? ` · ${esc(e.latency_ms)}ms` : ''}</span>`
               : `<span style="color:var(--hold)">${esc((body.decision.reason ?? '').slice(0, 90))}</span>`}
               ${body.action.params?.redacted?.length
                 ? `<div class="dim" style="font-size:11px">masked: ${esc(body.action.params.redacted.join(', '))}</div>`
@@ -631,7 +631,7 @@ function policies(hub, ctx) {
       ? '<tr><td colspan="6" class="empty">No policies yet. Publish one with <span class="mono">vw policy push</span>.</td></tr>'
       : rows.map((p) => `<tr>
           <td class="mono"><b>${esc(p.slug)}</b></td>
-          <td style="font-variant-numeric:tabular-nums">v${p.version}</td>
+          <td style="font-variant-numeric:tabular-nums">v${esc(p.version)}</td>
           <td class="mono dim">${short(p.hash, 16)}</td>
           <td class="dim">${esc(ago(p.created_at))}</td>
           <td class="dim">${esc(p.created_by ?? '—')}</td>
@@ -664,7 +664,7 @@ function events(hub, ctx) {
     <tbody>${rows.length === 0
       ? '<tr><td colspan="5" class="empty">Nothing yet.</td></tr>'
       : rows.map((e) => `<tr>
-          <td class="mono dim">${e.seq}</td>
+          <td class="mono dim">${esc(e.seq)}</td>
           <td class="dim mono">${esc(e.at.slice(5, 19).replace('T', ' '))}</td>
           <td>${esc(e.actor)} <span class="dim">${esc(e.actor_kind)}</span></td>
           <td class="mono">${esc(e.action)}</td>

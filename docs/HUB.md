@@ -322,6 +322,11 @@ blast radius of the one runtime that held it.
 | `approvals:read` / `approvals:write` | The escalation inbox |
 | `witness:sign` | A client asking the witness to counter-sign |
 | `admin` | Members, keys, org settings |
+| `sso:write` | Choosing the single sign-on provider. Owners only: the provider can vouch for any member, owners included |
+
+A key never carries a scope the person or key that made it lacks, so an admin
+cannot mint `sso:write`, `witness:sign` or `receipts:write`. Only an owner can
+make someone an owner or change an owner's role.
 
 An agent needs `receipts:write logs:write logs:read policies:read`. Nothing more.
 Giving it `receipts:read` lets a compromised agent read back the entire
@@ -622,7 +627,7 @@ GET    /v1/events                        the hub's own hash-chained audit trail
 GET    /v1/usage
 GET    /v1/settings/retention            period, plan cap, pruned so far  (admin)
 GET    /v1/integrations/oidc             SSO settings, never the secret  (admin)
-PUT    /v1/integrations/oidc             { issuer, clientId, clientSecret, domains, autoProvision, requireSso }  (admin)
+PUT    /v1/integrations/oidc             { issuer, clientId, clientSecret, domains, autoProvision, requireSso }  (sso:write: owners)
 DELETE /v1/integrations/oidc             (admin)
 GET    /sso/:org · /sso/callback         the browser sign-in flow
 GET    /v1/integrations/witnesses        outside witnesses, never tokens  (admin)

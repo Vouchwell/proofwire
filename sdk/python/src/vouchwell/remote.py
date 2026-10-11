@@ -47,6 +47,17 @@ def _check_url(url: str, allow_insecure: bool) -> str:
     )
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects. urllib would follow one with the API key attached,
+    to any host and over plain HTTP; the key goes to the hub's address only."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        return None
+
+
+_opener = urllib.request.build_opener(_NoRedirect)
+
+
 def _request(method: str, url: str, token: str, body: Any = None, timeout: float = 15) -> tuple[int, Any]:
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
@@ -55,7 +66,7 @@ def _request(method: str, url: str, token: str, body: Any = None, timeout: float
     if data is not None:
         req.add_header("content-type", "application/json")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as res:  # noqa: S310  (URL checked above)
+        with _opener.open(req, timeout=timeout) as res:  # noqa: S310  (URL checked above)
             return res.status, json.loads(res.read() or b"null")
     except urllib.error.HTTPError as err:
         try:

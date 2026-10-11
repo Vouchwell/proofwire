@@ -29,6 +29,19 @@ export const c = {
   grey: style(90),
 };
 
+/**
+ * A recorded string made safe to print: control characters shown as escapes.
+ * Tool names, reasons and principals come from agents and tool servers, and
+ * raw escape sequences in them could repaint the terminal, hiding a line or
+ * faking a verdict.
+ *
+ * @param {unknown} s
+ * @returns {string}
+ */
+export function plain(s) {
+  return String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
 /** @param {string} s */
 export function out(s = '') {
   process.stdout.write(s + '\n');

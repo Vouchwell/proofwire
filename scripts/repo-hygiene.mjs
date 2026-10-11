@@ -51,6 +51,10 @@ const KNOWN_FIXTURES = new Set([
 ]);
 
 const MAX_BYTES = 1024 * 1024;
+// An evidence bundle is the whole record of agent work on this repository
+// (evidence/README.md), so it grows with every session by design.
+const MAX_EVIDENCE_BYTES = 16 * 1024 * 1024;
+const EVIDENCE = /^evidence\/[^/]+\.json$/;
 const BINARY = /\.(woff2?|ttf|otf|png|jpe?g|gif|ico|webp|pdf|zip|gz)$/i;
 
 /**
@@ -72,8 +76,9 @@ export function hygieneProblems(root, files) {
     } catch {
       continue; // Deleted in the working tree; git will say so.
     }
-    if (bytes.length > MAX_BYTES) {
-      problems.push(`${file}: ${(bytes.length / 1024 / 1024).toFixed(1)} MB; nothing here should be over 1 MB`);
+    const limit = EVIDENCE.test(file) ? MAX_EVIDENCE_BYTES : MAX_BYTES;
+    if (bytes.length > limit) {
+      problems.push(`${file}: ${(bytes.length / 1024 / 1024).toFixed(1)} MB; nothing here should be over ${limit / 1024 / 1024} MB`);
     }
     if (BINARY.test(file)) continue;
 
