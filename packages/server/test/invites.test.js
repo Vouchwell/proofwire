@@ -465,7 +465,7 @@ test('credential changes are recorded in the control-plane trail', async () => {
 test('a pending invitation grants nothing until it is accepted', async () => {
   await api('POST', '/v1/invites', {
     token: adminToken,
-    body: { email: 'pending@acme.test', role: 'owner' },
+    body: { email: 'pending@acme.test', role: 'admin' },
   });
 
   // The membership exists so an admin can see it — but it is inert.

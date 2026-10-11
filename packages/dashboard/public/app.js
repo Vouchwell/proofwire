@@ -24,7 +24,7 @@ async function load() {
     ? (data.checkpoints.length === 0
         ? `<div class="banner">No checkpoints yet. A signed checkpoint is what lets an outside party detect a later rewrite — one is written when a proxy session ends.</div>`
         : '') + (never.length
-        ? `<div class="banner"><b>${never.length} action(s) were authorised and sent, but never finished.</b> ` +
+        ? `<div class="banner"><b>${esc(never.length)} action(s) were authorised and sent, but never finished.</b> ` +
           `The recorder stopped while they were out, so whether they took effect is not in the log: ` +
           `check each with the system it called. Choose <i>never finished</i> below to list them.</div>`
         : '')
@@ -53,8 +53,8 @@ function render() {
   $('rows').innerHTML = list.length === 0
     ? '<div class="empty">Nothing matches.</div>'
     : list.map((e) => `
-      <div class="row" role="option" data-seq="${e.seq}" aria-selected="${state.selected === e.seq}">
-        <span class="seq">${e.seq}</span>
+      <div class="row" role="option" data-seq="${esc(e.seq)}" aria-selected="${state.selected === e.seq}">
+        <span class="seq">${esc(e.seq)}</span>
         <span class="time">${esc(e.ts.slice(11, 19))}</span>
         <span>${e.wouldBe
           ? `<span class="pill escalate" title="monitor mode: ran, not enforced">would ${esc(e.wouldBe)}</span>`
@@ -65,7 +65,7 @@ function render() {
         </span>
         <span class="meta">${
           e.outcome === 'allow' && !(e.wouldBe && !e.status)
-            ? esc(e.status ?? '—') + (e.latencyMs != null ? ` · ${e.latencyMs}ms` : '')
+            ? esc(e.status ?? '—') + (e.latencyMs != null ? ` · ${esc(e.latencyMs)}ms` : '')
             : esc((e.reason ?? '').slice(0, 44))
         }</span>
       </div>`).join('');
@@ -78,11 +78,12 @@ function render() {
 async function select(seq) {
   state.selected = seq;
   render();
+  if (!Number.isInteger(seq) || seq < 0) return;
   const { receipt, proof } = await (await fetch(`/api/entry/${seq}`)).json();
   const d = receipt.decision;
 
   $('detail').innerHTML = `
-    <h2>Receipt ${receipt.seq}</h2>
+    <h2>Receipt ${esc(receipt.seq)}</h2>
     <dl>
       <dt>tool</dt><dd><code>${esc(receipt.action.target)}</code></dd>
       <dt>decision</dt><dd><span class="pill ${esc(d.outcome)}">${esc(d.outcome)}</span>${
@@ -97,7 +98,7 @@ async function select(seq) {
       <dt>for</dt><dd>${esc(receipt.actor.principal)}</dd>
       <dt>session</dt><dd><code>${esc(receipt.actor.session)}</code></dd>
       <dt>policy</dt><dd class="hash" title="${esc(d.policy)}">${short(d.policy, 16)}</dd>
-      ${receipt.result ? `<dt>result</dt><dd>${esc(receipt.result.status)}${receipt.result.latencyMs != null ? ` · ${receipt.result.latencyMs}ms` : ''}</dd>` : ''}
+      ${receipt.result ? `<dt>result</dt><dd>${esc(receipt.result.status)}${receipt.result.latencyMs != null ? ` · ${esc(receipt.result.latencyMs)}ms` : ''}</dd>` : ''}
     </dl>
 
     <h2>Arguments (redacted preview)</h2>
@@ -108,7 +109,7 @@ async function select(seq) {
     <pre>${esc(JSON.stringify(receipt.action.params.preview, null, 2))}</pre>
     <p style="color:var(--muted);font-size:12px">
       The log holds a salted commitment, not the payload:
-      <code>${short(receipt.action.params.hash, 20)}</code> over ${receipt.action.params.size} bytes.
+      <code>${short(receipt.action.params.hash, 20)}</code> over ${esc(receipt.action.params.size)} bytes.
     </p>
 
     <h2>Chain</h2>
@@ -121,14 +122,14 @@ async function select(seq) {
 
     <h2>Inclusion proof</h2>
     <dl>
-      <dt>tree size</dt><dd>${proof.treeSize}</dd>
+      <dt>tree size</dt><dd>${esc(proof.treeSize)}</dd>
       <dt>root</dt><dd class="hash">${short(proof.root, 24)}</dd>
-      <dt>path</dt><dd>${proof.proof.length} sibling hashes</dd>
+      <dt>path</dt><dd>${esc(proof.proof.length)} sibling hashes</dd>
     </dl>
     <pre>${proof.proof.map((h) => esc(h)).join('\n') || '(single-entry tree)'}</pre>
     <p style="color:var(--muted);font-size:12px">
       Anyone can recompute the root from this entry and these hashes.
-      Verify it offline with <code>vw prove ${receipt.seq}</code>.
+      Verify it offline with <code>vw prove ${esc(receipt.seq)}</code>.
     </p>`;
 }
 

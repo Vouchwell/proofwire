@@ -5,6 +5,54 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 
 ## Unreleased
 
+### Security
+
+Fixes from the pre-launch security audit. Each has a regression test
+(`packages/server/test/security.test.js` and the tests named below).
+
+- **Single sign-on could open another organisation.** A session started
+  through one organisation's identity provider reached every organisation
+  the person belonged to, so a provider set up to assert someone else's
+  email opened that person's other organisations. Such a session now reaches
+  the organisation whose provider vouched for it, and nothing else. A
+  provider also can no longer sign in, or add, someone whose account belongs
+  to another organisation: they join by invitation.
+- **Choosing the sign-in provider is now an owner's act** (new `sso:write`
+  scope, held by owners only). Whoever picks the provider can sign in as any
+  member, owners included.
+- **Admins could make owners, or change an owner's role**, through invites or
+  `POST /v1/members`. Only owners can now.
+- **Admins could set another person's password** through `POST /v1/members`,
+  claiming an account before its owner did. Passwords are set only by the
+  person, through an invitation link.
+- **Keys could carry scopes their maker lacked.** An admin could mint
+  `witness:sign` or `receipts:write`. A key now gets no scope its maker
+  doesn't hold.
+- **A malformed `Host` header or request path stopped the hub.** One request
+  ended the process. Bad requests now get a 400, and an unexpected error in a
+  handler answers 500 instead of crashing.
+- **Outbound requests to any hostname failed** (stream destinations, outside
+  witnesses, SSO providers) on Node 20 and later; only IP addresses worked.
+  The private-address check now covers every address a name resolves to, and
+  IPv6 forms that carry an IPv4 address (NAT64, 6to4, IPv4-compatible),
+  Teredo and site-local addresses. A response that trickles in no longer
+  holds a request open indefinitely.
+- **Redaction could be stalled.** Text an agent passed along, such as a long
+  run of `1-1-1-…`, took tens of seconds to scan for email addresses, in both
+  the JavaScript and Python recorders. Scanning is now linear.
+- **API keys followed redirects.** The CLI, proxy and Python SDK now refuse a
+  redirect instead of sending the key wherever it points. Before this, the
+  Python client sent it to any host, even over plain HTTP.
+- **Terminal control codes in recorded text.** Tool names and reasons are
+  printed with control characters shown as escapes in `vw log`, `vw prove`
+  and the proxy's approval prompt, so a tool server can't redraw the prompt
+  to disguise what is being approved.
+- **Smaller fixes:**
+  - an API key expiry that is not a date is refused (before, it never expired);
+  - dashboard and console values are escaped even when numeric;
+  - a non-numeric `latencyMs` is not stored;
+  - out-of-range paging values are clamped.
+
 ### Added
 
 - **`vw hook` stays fast however large the log grows.** Every hook call used

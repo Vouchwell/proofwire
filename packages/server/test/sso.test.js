@@ -99,7 +99,7 @@ async function startIdp() {
 /** @type {Hub} */
 let hub;
 let base = '';
-const acme = { org: '', slug: 'acme', admin: '' };
+const acme = { org: '', slug: 'acme', admin: '', owner: '' };
 
 before(async () => {
   await startIdp();
@@ -117,6 +117,11 @@ before(async () => {
   acme.admin = auth.createKey({ orgId: org.id, name: 'admin', scopes: ['admin', 'logs:read'] }).token;
   const dana = auth.createUser({ email: 'dana@acme.test', password: 'dana-password-long-enough' });
   auth.addMember(org.id, dana.id, 'admin');
+  // Choosing the provider is an owner's act, so configuration goes through
+  // an owner's session; the admin key is refused (see below).
+  const olga = auth.createUser({ email: 'olga@acme.test', password: 'olga-password-long-enough' });
+  auth.addMember(org.id, olga.id, 'owner');
+  acme.owner = `pw_session=${auth.createSession(olga.id).token}; pw_org=${org.id}`;
 });
 
 after(async () => {
@@ -135,7 +140,7 @@ async function api(method, p, o = {}) {
     redirect: 'manual',
     headers: {
       ...(o.token ? { authorization: `Bearer ${o.token}` } : {}),
-      ...(o.cookie ? { cookie: o.cookie } : {}),
+      ...(o.cookie ? { cookie: o.cookie, origin: base } : {}),
       ...(o.body !== undefined ? { 'content-type': 'application/json' } : {}),
     },
     body: o.body !== undefined ? JSON.stringify(o.body) : undefined,
@@ -175,12 +180,15 @@ async function signIn(who) {
 
 test('configuring SSO checks the issuer, the roles and the domains before saving', async () => {
   const good = { issuer: idp.issuer, clientId: idp.clientId, clientSecret: idp.clientSecret, domains: ['acme.test'] };
-  assert.equal((await api('PUT', '/v1/integrations/oidc', { token: acme.admin, body: { ...good, issuer: `${idp.issuer}/nope` } })).json.error.code, 'bad_issuer');
-  assert.equal((await api('PUT', '/v1/integrations/oidc', { token: acme.admin, body: { ...good, autoProvision: 'owner' } })).json.error.code, 'bad_role');
-  assert.equal((await api('PUT', '/v1/integrations/oidc', { token: acme.admin, body: { ...good, domains: [], autoProvision: 'auditor' } })).json.error.code, 'domains_required');
-  assert.equal((await api('PUT', '/v1/integrations/oidc', { token: acme.admin, body: { ...good, domains: ['not a domain'] } })).json.error.code, 'bad_domain');
+  assert.equal((await api('PUT', '/v1/integrations/oidc', { cookie: acme.owner, body: { ...good, issuer: `${idp.issuer}/nope` } })).json.error.code, 'bad_issuer');
+  assert.equal((await api('PUT', '/v1/integrations/oidc', { cookie: acme.owner, body: { ...good, autoProvision: 'owner' } })).json.error.code, 'bad_role');
+  assert.equal((await api('PUT', '/v1/integrations/oidc', { cookie: acme.owner, body: { ...good, domains: [], autoProvision: 'auditor' } })).json.error.code, 'domains_required');
+  assert.equal((await api('PUT', '/v1/integrations/oidc', { cookie: acme.owner, body: { ...good, domains: ['not a domain'] } })).json.error.code, 'bad_domain');
 
-  const set = await api('PUT', '/v1/integrations/oidc', { token: acme.admin, body: good });
+  const byAdmin = await api('PUT', '/v1/integrations/oidc', { token: acme.admin, body: good });
+  assert.equal(byAdmin.status, 403, 'whoever picks the provider can sign in as anyone: owners only');
+  assert.equal(byAdmin.json.error.code, 'insufficient_scope');
+  const set = await api('PUT', '/v1/integrations/oidc', { cookie: acme.owner, body: good });
   assert.equal(set.status, 200, JSON.stringify(set.json));
   assert.match(set.json.redirectUri, /\/sso\/callback$/);
   const shown = await api('GET', '/v1/integrations/oidc', { token: acme.admin });
@@ -217,7 +225,7 @@ test('an email from another domain is refused even for a member', async () => {
 
 test('with provisioning on, a new person from an allowed domain joins with that role, never owner', async () => {
   await api('PUT', '/v1/integrations/oidc', {
-    token: acme.admin,
+    cookie: acme.owner,
     body: { issuer: idp.issuer, clientId: idp.clientId, clientSecret: idp.clientSecret, domains: ['acme.test'], autoProvision: 'auditor' },
   });
   const r = await signIn({ email: 'newhire@acme.test' });
@@ -227,6 +235,48 @@ test('with provisioning on, a new person from an allowed domain joins with that 
 });
 
 // ── attacks ───────────────────────────────────────────────────────────────
+
+test("a session from one organization's provider reaches that organization only", async () => {
+  // A provider says whatever its organization's owners configure it to say.
+  // Acme's could assert the email of someone who runs another company on
+  // this hub: that must never open the other company's org, nor even hand
+  // the person's account to Acme.
+  const auth = new Auth(hub.store);
+  const other = hub.store.createOrg({ slug: 'victimco', name: 'VictimCo' });
+  const victim = auth.createUser({ email: 'boss@acme.test', password: 'victim-password-long-enough' });
+  auth.addMember(other.id, victim.id, 'owner');
+  await api('PUT', '/v1/integrations/oidc', {
+    cookie: acme.owner,
+    body: { issuer: idp.issuer, clientId: idp.clientId, clientSecret: idp.clientSecret, domains: ['acme.test'], autoProvision: 'auditor' },
+  });
+
+  const r = await signIn({ email: 'boss@acme.test', sub: 'attacker-chosen-subject' });
+  assert.notEqual(r.location, '/', 'an account outside the org is not taken over by its provider');
+  assert.doesNotMatch(r.cookie, /pw_session=/);
+  assert.equal(auth.orgsFor(victim.id).length, 1, 'and is not added to the org either');
+
+  // Someone in both orgs signs in through Acme's provider: the session
+  // works in Acme and nowhere else.
+  const both = auth.createUser({ email: 'pat@acme.test', password: 'pat-password-long-enough' });
+  auth.addMember(acme.org, both.id, 'auditor');
+  auth.addMember(other.id, both.id, 'owner');
+  const s2 = await signIn({ email: 'pat@acme.test' });
+  assert.equal(s2.location, '/');
+  const here = await api('GET', '/v1/me', { cookie: s2.cookie });
+  assert.equal(here.json.org.id, acme.org, 'the session works in the org whose provider vouched for it');
+  for (const ref of [other.id, other.slug]) {
+    const there = await api('GET', `/v1/me?org=${ref}`, { cookie: s2.cookie });
+    assert.equal(there.status, 401, 'and nowhere else');
+  }
+  const cookied = await api('GET', '/v1/me', { cookie: `${s2.cookie.replace(/pw_org=[^;]*/, `pw_org=${other.id}`)}` });
+  assert.equal(cookied.status, 401, 'not by switching the org cookie either');
+
+  // The person's own password session still reaches their other org.
+  const own = auth.createSession(both.id);
+  const mine = await api('GET', `/v1/me?org=${other.id}`, { cookie: `pw_session=${own.token}` });
+  assert.equal(mine.status, 200);
+  assert.equal(mine.json.org.id, other.id);
+});
 
 test('a tampered or wrong ID token signs nobody in', async () => {
   const cases = {
@@ -314,7 +364,7 @@ test('when SSO is required, a password session loses the organization and an SSO
   assert.equal((await api('GET', '/v1/me', { cookie: pwCookie })).status, 200);
 
   await api('PUT', '/v1/integrations/oidc', {
-    token: acme.admin,
+    cookie: acme.owner,
     body: { issuer: idp.issuer, clientId: idp.clientId, clientSecret: idp.clientSecret, domains: ['acme.test'], requireSso: true },
   });
   assert.equal((await api('GET', '/v1/me', { cookie: pwCookie })).status, 401, 'a password session still reached the org');
@@ -336,11 +386,14 @@ test('on a normal hub, an issuer on a private address or over plain HTTP is refu
   const at = (await strict.listen(0)).url.replace('0.0.0.0', '127.0.0.1');
   try {
     const org = strict.store.createOrg({ slug: 'x', name: 'x' });
-    const token = new Auth(strict.store).createKey({ orgId: org.id, name: 'a', scopes: ['admin'] }).token;
+    const sauth = new Auth(strict.store);
+    const owner = sauth.createUser({ email: 'o@x.test', password: 'owner-password-long-enough' });
+    sauth.addMember(org.id, owner.id, 'owner');
+    const cookie = `pw_session=${sauth.createSession(owner.id).token}; pw_org=${org.id}`;
     for (const issuer of [idp.issuer, 'https://127.0.0.1:1', 'https://169.254.169.254', 'https://[::1]:8443']) {
       const res = await fetch(`${at}/v1/integrations/oidc`, {
         method: 'PUT',
-        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        headers: { cookie, origin: at, 'content-type': 'application/json' },
         body: JSON.stringify({ issuer, clientId: 'c' }),
       });
       const json = await res.json();

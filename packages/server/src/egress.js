@@ -31,8 +31,8 @@ const MAX_BYTES = 1024 * 1024;
  * @param {string} ip
  */
 export function isPrivateAddress(ip) {
-  let a = ip.toLowerCase();
-  if (a.startsWith('::ffff:')) a = a.slice(7); // IPv4-mapped IPv6
+  let a = String(ip).toLowerCase();
+  if (a.startsWith('::ffff:') && net.isIPv4(a.slice(7))) a = a.slice(7); // IPv4-mapped IPv6, dotted
   if (net.isIPv4(a)) {
     const [b0, b1] = a.split('.').map(Number);
     return (
@@ -47,14 +47,44 @@ export function isPrivateAddress(ip) {
     );
   }
   if (net.isIPv6(a)) {
+    const h = hextets(a);
+    const v4 = (/** @type {number} */ i) => `${h[i] >> 8}.${h[i] & 255}.${h[i + 1] >> 8}.${h[i + 1] & 255}`;
+    const zeros = (/** @type {number} */ n) => h.slice(0, n).every((x) => x === 0);
+    // Addresses that carry an IPv4 address inside them reach it: judge that.
+    if (zeros(5) && h[5] === 0xffff) return isPrivateAddress(v4(6));                // ::ffff:a.b.c.d, any spelling
+    if (zeros(6)) return h[6] === 0 && h[7] <= 1 ? true : isPrivateAddress(v4(6));  // ::, ::1, ::a.b.c.d
+    if (h[0] === 0x64 && h[1] === 0xff9b) return isPrivateAddress(v4(6));            // NAT64 64:ff9b::/96
+    if (h[0] === 0x2002) return isPrivateAddress(v4(1));                             // 6to4
+    if (h[0] === 0x2001 && h[1] === 0) return true;                                  // Teredo
     return (
-      a === '::' || a === '::1' ||
-      a.startsWith('fe8') || a.startsWith('fe9') || a.startsWith('fea') || a.startsWith('feb') || // fe80::/10
-      a.startsWith('fc') || a.startsWith('fd') || // unique local
-      a.startsWith('ff')                          // multicast
+      (h[0] & 0xffc0) === 0xfe80 || // link-local fe80::/10
+      (h[0] & 0xffc0) === 0xfec0 || // site-local fec0::/10 (deprecated)
+      (h[0] & 0xfe00) === 0xfc00 || // unique local fc00::/7
+      (h[0] & 0xff00) === 0xff00    // multicast
     );
   }
   return true;
+}
+
+/**
+ * The eight 16-bit groups of an IPv6 address, `::` expanded and a trailing
+ * dotted IPv4 part converted.
+ *
+ * @param {string} a  Valid IPv6, lower case.
+ * @returns {number[]}
+ */
+function hextets(a) {
+  let s = a.replace(/%.*$/, '');
+  const dotted = /(\d+\.\d+\.\d+\.\d+)$/.exec(s);
+  if (dotted) {
+    const [p, q, r, t] = dotted[1].split('.').map(Number);
+    s = s.slice(0, -dotted[1].length) + `${((p << 8) | q).toString(16)}:${((r << 8) | t).toString(16)}`;
+  }
+  const [head, tail] = s.includes('::') ? s.split('::') : [s, null];
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const fill = tail === null ? [] : Array(8 - left.length - right.length).fill('0');
+  return [...left, ...fill, ...right].map((x) => parseInt(x || '0', 16));
 }
 
 /**
@@ -75,7 +105,8 @@ export function destinationProblem(raw, opts = {}) {
   }
   if (u.username || u.password) return 'must not carry credentials in the URL';
   if (u.protocol !== 'https:' && !(opts.allowPrivate && u.protocol === 'http:')) return 'must be https';
-  const host = u.hostname.replace(/^\[|\]$/g, '');
+  // A trailing dot names the same host ("localhost." is localhost).
+  const host = u.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '');
   if (net.isIP(host) && !opts.allowPrivate && isPrivateAddress(host)) return 'is a private address';
   if (!opts.allowPrivate && /^(localhost|.*\.localhost|.*\.internal|.*\.local)$/i.test(host)) return 'is a private address';
   return null;
@@ -109,13 +140,21 @@ export function guardedRequest(url, opts = {}) {
           ...(opts.headers ?? {}),
         },
         timeout: opts.timeoutMs ?? 10_000,
+        // Node asks for every address (`all: true`) when it races IPv4 and
+        // IPv6, and for one otherwise; answering the first with the second's
+        // shape failed every request to a hostname. Every address is checked
+        // either way, and one private address refuses the name: a name that
+        // resolves both ways is a rebinding trick, not a misconfiguration.
         lookup: (hostname, options, cb) => {
-          dns.lookup(hostname, { ...options, all: false }, (err, address, family) => {
-            if (err) return cb(err, address, family);
-            if (!opts.allowPrivate && isPrivateAddress(String(address))) {
-              return cb(new Error(`${hostname} resolves to a private address`), address, family);
+          dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+            if (err) return cb(err);
+            if (!opts.allowPrivate) {
+              const bad = addresses.find((x) => isPrivateAddress(x.address));
+              if (bad) return cb(new Error(`${hostname} resolves to a private address`));
             }
-            cb(null, address, family);
+            if (!addresses.length) return cb(new Error(`${hostname} has no address`));
+            if (options.all) return cb(null, addresses);
+            cb(null, addresses[0].address, addresses[0].family);
           });
         },
       },
@@ -145,6 +184,10 @@ export function guardedRequest(url, opts = {}) {
       },
     );
     req.on('timeout', () => req.destroy(new Error(`${u.origin} did not answer in time`)));
+    // The socket timeout restarts with every byte, so a server dripping its
+    // answer could hold a worker for hours. This one does not restart.
+    const deadline = setTimeout(() => req.destroy(new Error(`${u.origin} took too long`)), (opts.timeoutMs ?? 10_000) * 3);
+    req.on('close', () => clearTimeout(deadline));
     req.on('error', reject);
     if (body) req.write(body);
     req.end();

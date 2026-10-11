@@ -56,7 +56,9 @@ DEFAULT_DETECTORS: list[Detector] = [
     Detector("credit_card", "financial", _p(r"\b(?:\d[ -]?){12,18}\d\b"), _luhn),
     Detector("us_ssn", "pii", _p(r"\b(?!000|666|9\d\d)\d{3}-\d{2}-\d{4}\b")),
     Detector("iban", "financial", _p(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")),
-    Detector("email", "pii", _p(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
+    # Lengths capped at the RFC 5321 limits: unbounded, a long run of
+    # address-like characters with no @ took quadratic time to rule out.
+    Detector("email", "pii", _p(r"\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}\b")),
     Detector("phone_e164", "pii", _p(r"(?<![\w.])\+[1-9]\d{7,14}(?![\w.])")),
 ]
 

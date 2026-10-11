@@ -91,7 +91,8 @@ class _Call:
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
-        assert self.intent is not None
+        if self.intent is None:  # not an assert: python -O strips those
+            raise RuntimeError("record() was exited without being entered")
         latency = round((time.monotonic() - self._started) * 1000)
         if exc is None:
             result = {"status": "ok", "latencyMs": latency, "payload": _jsonable(self.result)}

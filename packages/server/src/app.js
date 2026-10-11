@@ -257,12 +257,19 @@ export class Hub {
     if (!user) return null;
 
     const wanted = url.searchParams.get('org') ?? cookies.get('pw_org') ?? null;
-    // An organisation that requires single sign-on is out of reach of any
-    // session not started through its own SSO, whatever else the person can
-    // see. API keys are unaffected: they are machines, not people.
+    // A session started through an organisation's single sign-on reaches that
+    // organisation and no other. Its identity provider is configured by that
+    // organisation's admins, so it vouches for nobody anywhere else: honouring
+    // it more widely let an admin of one org run a provider that asserted
+    // someone else's email and step into every org that person belongs to.
+    //
+    // And an organisation that requires single sign-on is out of reach of any
+    // session not started through its own SSO. API keys are unaffected: they
+    // are machines, not people.
+    const viaSso = typeof user.via === 'string' && user.via.startsWith('sso:') ? user.via.slice('sso:'.length) : null;
     const orgs = this.auth.orgsFor(user.id).filter((o) => {
-      const sso = this.store.integration(o.id, 'oidc');
-      return !sso?.config.requireSso || user.via === `sso:${o.id}`;
+      if (viaSso) return o.id === viaSso;
+      return !this.store.integration(o.id, 'oidc')?.config.requireSso;
     });
     if (orgs.length === 0) return null;
 
@@ -280,6 +287,27 @@ export class Hub {
       user,
       org,
     };
+  }
+
+  /**
+   * Throw unless the caller may give `role` to a person (who, if `userId` is
+   * set, may already be a member). Admins manage members, but only an owner
+   * makes an owner or changes one: otherwise an admin could promote themselves
+   * or demote the owner, since adding a membership overwrites its role.
+   *
+   * @param {import('./auth.js').Principal} principal
+   * @param {string} role
+   * @param {string} [userId]
+   */
+  _assertMayGrant(principal, role, userId) {
+    if (principal.role === 'owner') return;
+    if (role === 'owner') {
+      throw new StoreError(403, 'owner_only', 'only an owner can make someone an owner');
+    }
+    const current = userId ? this.auth.membership(principal.orgId, userId) : null;
+    if (current?.role === 'owner') {
+      throw new StoreError(403, 'owner_only', "only an owner can change an owner's role");
+    }
   }
 
   /**
@@ -1338,6 +1366,12 @@ export class Hub {
       if (!name || !Array.isArray(scopes)) {
         throw new StoreError(400, 'missing_fields', 'name and scopes are required');
       }
+      // A key carries no more than whoever made it: otherwise an admin could
+      // mint the scopes their role leaves out.
+      const beyond = scopes.filter((s) => !ctx.principal.scopes.includes(String(s)));
+      if (beyond.length) {
+        throw new StoreError(403, 'insufficient_scope', `you cannot give a key scopes you do not hold: ${beyond.join(', ')}`);
+      }
       const pinned = log ? this._log(ctx.principal, String(log)).id : undefined;
       const key = this.auth.createKey({
         orgId: ctx.principal.orgId,
@@ -1385,9 +1419,10 @@ export class Hub {
       if (!ROLES.includes(String(role))) {
         throw new StoreError(400, 'bad_role', `role must be one of ${ROLES.join(', ')}`);
       }
+      const existing = this.auth.userByEmail(String(email));
+      this._assertMayGrant(ctx.principal, String(role), existing?.id);
 
-      const user =
-        this.auth.userByEmail(String(email)) ?? this.auth.createUser({ email: String(email) });
+      const user = existing ?? this.auth.createUser({ email: String(email) });
 
       // The membership is created now, not on redemption, so an admin can see
       // who has been invited and to what. It grants nothing on its own: the
@@ -1490,9 +1525,20 @@ export class Hub {
       requireScope(ctx.principal, 'admin');
       const { email, role, password } = ctx.body ?? {};
       if (!email || !role) throw new StoreError(400, 'missing_fields', 'email and role are required');
-      const user =
-        this.auth.userByEmail(String(email)) ??
-        this.auth.createUser({ email: String(email), password: password ? String(password) : undefined });
+      // Never a password chosen here. Accounts are shared across the hub's
+      // organisations, so an admin who could set one could create
+      // someone@other-company.com with a password they know, and be signed in
+      // as that person the moment the other company invited them. A person
+      // sets their own password, through an invite link.
+      if (password !== undefined) {
+        throw new StoreError(400, 'use_invite', 'a password cannot be set for someone else; invite them (POST /v1/invites) and they choose their own');
+      }
+      if (!ROLES.includes(String(role))) {
+        throw new StoreError(400, 'bad_role', `role must be one of ${ROLES.join(', ')}`);
+      }
+      const existing = this.auth.userByEmail(String(email));
+      this._assertMayGrant(ctx.principal, String(role), existing?.id);
+      const user = existing ?? this.auth.createUser({ email: String(email) });
       this.auth.addMember(ctx.principal.orgId, user.id, String(role));
       this.store.recordEvent({
         orgId: ctx.principal.orgId,
@@ -1546,7 +1592,9 @@ export class Hub {
     });
 
     r.put('/v1/integrations/oidc', async (ctx) => {
-      requireScope(ctx.principal, 'admin');
+      // The provider vouches for who is who: whoever picks it can sign in as
+      // any member, the owners included. Only owners hold this scope.
+      requireScope(ctx.principal, 'sso:write');
       const b = ctx.body ?? {};
       const issuer = String(b.issuer ?? '');
       const clientId = String(b.clientId ?? '');
@@ -2101,6 +2149,12 @@ export class Hub {
     let user = identity ? this.db.prepare('SELECT * FROM users WHERE id = ?').get(identity.user_id) : null;
     if (!user) {
       user = this.auth.userByEmail(email);
+      // An account that exists but is not in this organization belongs to
+      // someone else's organization: this provider does not get to speak for
+      // it. Its owner joins by invitation instead.
+      if (user && !this.auth.orgsFor(user.id).some((o) => o.id === org.id)) {
+        return refuse('this email already has an account; ask for an invitation', email, true);
+      }
       if (user) {
         const other = this.db
           .prepare('SELECT subject FROM sso_identities WHERE org_id = ? AND issuer = ? AND user_id = ?')
@@ -2488,6 +2542,8 @@ export class Hub {
     if (!url) return;
 
     fetch(url, {
+      // Credentials go to this address only: a redirect could carry them elsewhere.
+      redirect: 'error',
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -2602,11 +2658,16 @@ export class Hub {
       res.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
     }
 
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const started = Date.now();
     let status = 500;
+    /** @type {URL | undefined} */
+    let url;
 
     try {
+      // Never from the Host header: the requester writes it, and a malformed
+      // one ("a b") made this throw outside any handler and took the process
+      // down. Nothing here reads the URL's host; links come from _publicUrl.
+      url = new URL(req.url ?? '/', 'http://hub.invalid');
       const matched = this.router.match(req.method ?? 'GET', url.pathname);
       if (!matched) {
         throw new StoreError(404, 'not_found', `no route for ${req.method} ${url.pathname}`);
@@ -2695,7 +2756,7 @@ export class Hub {
       if (internal) {
         console.error(
           JSON.stringify({
-            level: 'error', requestId, path: url.pathname,
+            level: 'error', requestId, path: url?.pathname,
             message: internal.message, stack: internal.stack,
           }),
         );
@@ -2708,7 +2769,7 @@ export class Hub {
             level: status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info',
             requestId,
             method: req.method,
-            path: url.pathname,
+            path: url?.pathname,
             status,
             ms: Date.now() - started,
           }),
@@ -2722,7 +2783,15 @@ export class Hub {
    * @returns {Promise<{ url: string, server: import('node:http').Server }>}
    */
   listen(port = this.config.port) {
-    this.server = http.createServer((req, res) => this.handle(req, res));
+    // handle() answers every error itself; this is the last guard, so that a
+    // request can never become an unhandled rejection, which ends the process.
+    this.server = http.createServer((req, res) => {
+      this.handle(req, res).catch((err) => {
+        console.error(JSON.stringify({ level: 'error', event: 'request.unhandled', message: String(err?.message ?? err) }));
+        if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
+        if (!res.writableEnded) res.end('{"error":{"code":"internal_error"}}');
+      });
+    });
     return new Promise((resolve, reject) => {
       this.server.on('error', reject);
       this.server.listen(port, this.config.host, () => {

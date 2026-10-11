@@ -71,6 +71,8 @@ export class RemoteSink {
    */
   async _fetch(path, init = {}) {
     const res = await fetch(this.url + path, {
+      // Credentials go to this address only: a redirect could carry them elsewhere.
+      redirect: 'error',
       ...init,
       headers: {
         authorization: `Bearer ${this.token}`,
@@ -309,6 +311,7 @@ export function hubApprover(opts) {
     const headers = { authorization: `Bearer ${opts.token}`, 'content-type': 'application/json' };
     try {
       const created = await fetch(`${base}/v1/approvals`, {
+        redirect: 'error',
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -341,6 +344,7 @@ export function hubApprover(opts) {
         const remaining = Math.max(1, Math.ceil((deadline - Date.now()) / 1000));
         const hop = Math.min(30, remaining);
         const res = await fetch(`${base}/v1/approvals/${id}?wait=${hop}`, {
+          redirect: 'error',
           headers,
           signal: AbortSignal.timeout((hop + 10) * 1000),
         });
@@ -379,6 +383,7 @@ export function hubApprover(opts) {
 export async function fetchPolicy(opts) {
   const base = trimSlashes(opts.url);
   const res = await fetch(`${base}/v1/policies/${encodeURIComponent(opts.slug)}`, {
+    redirect: 'error',
     headers: { authorization: `Bearer ${opts.token}` },
     signal: AbortSignal.timeout(15_000),
   });

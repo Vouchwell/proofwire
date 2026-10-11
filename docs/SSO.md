@@ -36,11 +36,16 @@ it unless the document names exactly that issuer.
 > under *Token configuration → Add optional claim → ID → email*, or sign-in
 > will be refused with "the provider sent no email address".
 
-## 2. Connect it (admin key)
+## 2. Connect it (owner)
+
+Whoever chooses the provider can sign in as any member, owners included, so
+this takes the `sso:write` scope, which only owners hold. An owner mints a key
+with it (`POST /v1/keys` with `"scopes": ["admin", "sso:write"]`), uses it here,
+and revokes it afterwards.
 
 ```bash
 curl -X PUT https://<your hub>/v1/integrations/oidc \
-  -H "authorization: Bearer $ADMIN_KEY" -H 'content-type: application/json' \
+  -H "authorization: Bearer $OWNER_SSO_KEY" -H 'content-type: application/json' \
   -d '{
     "issuer": "https://acme.okta.com",
     "clientId": "0oa1b2c3d4",
@@ -54,7 +59,7 @@ curl -X PUT https://<your hub>/v1/integrations/oidc \
 | Field | Meaning |
 | --- | --- |
 | `domains` | Only emails at these domains may sign in through SSO. Recommended always, and required with `autoProvision`. |
-| `autoProvision` | `null`: only people already invited can sign in. A role (`admin`, `operator`, `auditor`): anyone from an allowed domain who signs in joins with that role. `owner` is never allowed, because signing in must not be how someone gets full control. |
+| `autoProvision` | `null`: only people already invited can sign in. A role (`admin`, `operator`, `auditor`): anyone from an allowed domain who signs in joins with that role. Someone who already has an account on this hub, through another organisation, is not added this way: they join by invitation, so one organisation's provider never speaks for another's people. `owner` is never allowed, because signing in must not be how someone gets full control. |
 | `requireSso` | `true`: members can reach this organisation only through a session started by its SSO. Password sessions lose access immediately, **including the one you're using**. Keep an admin API key to undo it. |
 | `clientSecret` | Optional. Leave it out for a public client, and PKCE alone protects the exchange. |
 

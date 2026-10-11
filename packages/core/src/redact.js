@@ -72,7 +72,9 @@ export const DEFAULT_DETECTORS = [
   {
     type: 'email',
     severity: 'pii',
-    pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+    // Lengths capped at the RFC 5321 limits: unbounded, a long run of
+    // address-like characters with no @ took quadratic time to rule out.
+    pattern: /\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}\b/g,
   },
   {
     type: 'phone_e164',

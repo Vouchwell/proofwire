@@ -139,6 +139,8 @@ export function httpSigner(opts) {
     kind: 'http',
     async sign(digest) {
       const res = await fetch(opts.url, {
+        // Credentials go to this address only: a redirect could carry them elsewhere.
+        redirect: 'error',
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(opts.headers ?? {}) },
         body: JSON.stringify({ kid: identity.kid, digest: digest.toString('base64url') }),
