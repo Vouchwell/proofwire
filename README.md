@@ -17,7 +17,7 @@ Run it standalone on one machine, or as a **hub** your whole organisation
 writes to — with shared policy, an approvals inbox, tenant isolation, and
 independent witnesses that make a hosted log worth believing.
 
-**[Check a real log in your browser →](https://vouchwell.github.io/vouchwell/)** Then try to cheat it: edit a
+**[Check a real log in your browser →](https://vouchwell.axonscape.com/)** Then try to cheat it: edit a
 receipt, cut the tail off, invent your own witnesses. Nothing you paste leaves
 the page.
 

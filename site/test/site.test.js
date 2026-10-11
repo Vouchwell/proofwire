@@ -118,7 +118,8 @@ test('repository links go to this repository, and documents they name exist', ()
 test('the site makes no third-party requests', () => {
   // Resources: nothing loaded, embedded, or fetched from another origin.
   const loaded = [
-    ...[...INDEX.matchAll(/<link\b[^>]*\shref="([^"]*)"/g)].map((m) => m[1]),
+    // rel=canonical names the page's own address; nothing is fetched from it.
+    ...[...INDEX.matchAll(/<link\b[^>]*\shref="([^"]*)"[^>]*>/g)].filter((m) => !/\srel="canonical"/.test(m[0])).map((m) => m[1]),
     ...attrs(INDEX, 'src'),
     ...[...INDEX.matchAll(/url\(\s*['"]?([^)'"]+)/g)].map((m) => m[1]),
     ...[...INDEX.matchAll(/@import\s+['"]?([^'";)]+)/g)].map((m) => m[1]),
@@ -187,6 +188,21 @@ test('release.json says whether the packages exist, and says it plainly', () => 
   const rel = JSON.parse(read('release.json'));
   assert.deepEqual(Object.keys(rel), ['npm']);
   assert.ok(rel.npm === null || /^\d+\.\d+\.\d+(-[\w.]+)?$/.test(rel.npm), `npm must be null or a version, got ${JSON.stringify(rel.npm)}`);
+});
+
+test('the site names its own domain as its address, and nothing on github.io', () => {
+  // Served from vouchwell.axonscape.com (docs/PUBLISHING.md). The canonical
+  // link tells search engines which of the addresses that reach the page is
+  // the real one while the old github.io address still redirects here.
+  const SITE_URL = 'https://vouchwell.axonscape.com/';
+  assert.match(INDEX, new RegExp(`<link rel="canonical" href="${SITE_URL}">`));
+  assert.match(INDEX, new RegExp(`<meta property="og:url" content="${SITE_URL}">`));
+  for (const [name, text] of [['index.html', INDEX], ['404.html', NOT_FOUND]]) {
+    assert.doesNotMatch(text, /href="https?:\/\/[^"]*\.github\.io/, `${name} links to a github.io address`);
+  }
+  for (const doc of ['README.md', 'witnesses/README.md']) {
+    assert.doesNotMatch(readFileSync(path.join(ROOT, doc), 'utf8'), /github\.io/, `${doc} still points at github.io`);
+  }
 });
 
 test('the page is well-formed enough to be found and shared', () => {
