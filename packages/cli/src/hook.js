@@ -519,6 +519,32 @@ function holderAlive(text) {
   }
 }
 
+/** How long a dead holder's lock must sit unchanged before it is taken over. */
+const ABANDONED_MS = 1000;
+
+/**
+ * Whether the lock still names `holder`, a process that has exited, and has
+ * not been touched for a while.
+ *
+ * "Its holder is dead" alone is not enough. Reading the holder and removing
+ * the file are two steps: in between, that holder can release the lock and
+ * exit, and a third writer take it. Removing the file then removes a live
+ * lock, two writers append at once, and a receipt is lost. That was seen as
+ * seven receipts from eight parallel calls. A lock taken a moment ago is
+ * fresh, so it is never mistaken for one a crash left behind.
+ *
+ * @param {string} file
+ * @param {string | null} holder
+ */
+function abandoned(file, holder) {
+  try {
+    if (Date.now() - fs.statSync(file).mtimeMs < ABANDONED_MS) return false;
+    return readIfPresent(file) === holder;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Whether a failure to create the lock file means "someone else has it, try
  * again" rather than a real error.
@@ -561,7 +587,10 @@ export function withLock(dir, fn, opts = {}) {
       if (!lockIsBusy(code, opts.platform)) throw e;
       // A writer that died holding the lock must not stop every later one.
       // The lock names its holder, so a dead holder's lock is taken over.
-      if (code === 'EEXIST' && !holderAlive(readIfPresent(file))) fs.rmSync(file, { force: true, maxRetries: 5, retryDelay: 20 });
+      if (code === 'EEXIST') {
+        const holder = readIfPresent(file);
+        if (!holderAlive(holder) && abandoned(file, holder)) fs.rmSync(file, { force: true, maxRetries: 5, retryDelay: 20 });
+      }
       if (Date.now() > deadline) throw new Error(`the log at ${dir} stayed locked for ${waitMs / 1000}s (last: ${code})`);
       Atomics.wait(nap, 0, 0, 20);
     }

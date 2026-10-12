@@ -12,6 +12,15 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
   and goes on to PyPI and the GitHub release. **Actions → Release → Run
   workflow** takes a `tag` to finish one by hand.
 
+### Fixed
+
+- **`vw hook` could lose a receipt when tool calls ran in parallel.** A
+  waiting hook that found the lock's holder had exited would delete the lock,
+  even if, in that instant, another hook had just taken it. Two hooks then
+  wrote at once and one call went unrecorded (seen on Windows CI: 7 receipts
+  from 8 calls). A dead holder's lock is now taken over only once it has sat
+  unchanged for a second.
+
 ## 0.6.0 — 2026-10-12
 
 The first release as **Vouchwell**: `npm i -g vouchwell` and `pip install vouchwell`.
