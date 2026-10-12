@@ -10,7 +10,7 @@ import { cmdPolicyTemplates, cmdPolicyTemplate, templatePolicyText } from './pol
 import { RemoteSink, hubApprover, fetchPolicy } from '@vouchwell/proxy/remote';
 import { approverFrom } from '@vouchwell/proxy/approve';
 import { c, plain, out, err, ok, bad, warn, info, heading, kv, table, outcomeBadge, parseArgs } from './ui.js';
-import { witnessKeysFrom } from './witness-keys.js';
+import { witnessKeysFrom, logKeysFrom } from './witness-keys.js';
 import { LOG_DIR, CONFIG_FILE, POLICY_FILE } from './legacy-paths.js';
 import { cmdWitnesses, cmdStreams } from './hub-integrations.js';
 import { cmdHook } from './hook.js';
@@ -548,15 +548,50 @@ function cmdCheck(args) {
     bad(`--witnesses must be a whole number, got ${JSON.stringify(args.witnesses)}`);
     return 2;
   }
-  const bundle = JSON.parse(fs.readFileSync(file, 'utf8'));
+  let bundle;
+  try {
+    bundle = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (err) {
+    if (args.json) {
+      out(JSON.stringify({ file, ok: false, issues: [`cannot read ${file}: ${/** @type {Error} */ (err).message}`] }));
+      return 1;
+    }
+    throw err;
+  }
   const trustedWitnesses = witnessKeysFrom(args);
+  const trustedLogKeys = logKeysFrom(args);
   const res = verifyBundle(bundle, {
     expectRoot: args.root,
     minWitnesses,
     trustedWitnesses,
+    trustedLogKeys,
   });
+  // Who signed it, by kid and public key, as the bundle states it. Shown so
+  // the key can be compared with the one its owner published (`vw keys`),
+  // and pinned from then on.
+  const signers = [...new Set((bundle.entries ?? []).map((/** @type {any} */ e) => e?.receipt?.attest?.kid).filter((k) => typeof k === 'string'))]
+    .map((kid) => ({ kid, publicKey: typeof bundle.keyring?.[kid] === 'string' ? bundle.keyring[kid] : null }));
 
-  heading(`Bundle · ${bundle.log}`);
+  if (args.json) {
+    out(JSON.stringify({
+      file,
+      ok: res.ok,
+      log: typeof bundle.log === 'string' ? bundle.log : null,
+      entries: res.checked,
+      treeSize: Number.isInteger(bundle.treeSize) ? bundle.treeSize : null,
+      partial: bundle.partial === true,
+      root: typeof bundle.root === 'string' ? bundle.root : null,
+      checkpoints: Array.isArray(bundle.checkpoints) ? bundle.checkpoints.length : 0,
+      signers,
+      logKeyPinned: Boolean(trustedLogKeys),
+      witnessesRequired: minWitnesses,
+      witnessedSize: res.witnessedSize ?? null,
+      issues: res.issues,
+    }));
+    return res.ok ? 0 : 1;
+  }
+
+  heading(`Bundle · ${plain(bundle.log)}`);
   kv([
     ['exported', bundle.exported ?? '—'],
     ['entries', `${res.checked}${bundle.partial ? ` (a subset of ${bundle.treeSize})` : ''}`],
@@ -575,6 +610,12 @@ function cmdCheck(args) {
       const covered = res.witnessedSize === 0 ? 'none' : `entries 0–${res.witnessedSize - 1}`;
       warn(`Witnesses vouch for ${covered} of ${bundle.treeSize}. Entries from ${res.witnessedSize} on are`);
       warn('signed by the log alone; a newer witnessed checkpoint would cover them.');
+    }
+    if (!trustedLogKeys && signers.length) {
+      out('');
+      warn('Nothing outside this bundle says whose key signed it. Compare it with the key');
+      warn(`the log's owner published (${c.cyan('vw keys')}), then pin it:`);
+      for (const sgn of signers) warn(`  ${c.cyan(`vw check <file> --log-key ${plain(sgn.kid)}=${plain(sgn.publicKey ?? '?')}`)}`);
     }
     if (claimsWitnesses && !trustedWitnesses) {
       out('');
@@ -867,7 +908,7 @@ function cmdHelp() {
   out(`    ${c.cyan('vw verify')}                      audit the local log end to end  ${c.grey('[--fail-on-unfinished]')}`);
   out(`    ${c.cyan('vw prove <seq>')}                 inclusion proof for one receipt`);
   out(`    ${c.cyan('vw export [file]')}               evidence bundle for a third party  ${c.grey('[--since --session]')}`);
-  out(`    ${c.cyan('vw check <file>')}                verify a bundle with nothing but itself`);
+  out(`    ${c.cyan('vw check <file>')}                verify a bundle with nothing but itself  ${c.grey('[--log-key kid=pub --witnesses N --witness-keys f --json]')}`);
   out(`    ${c.cyan('vw report')}                      evidence pack for auditors: AI Act, SOC 2  ${c.grey('[--since --until --out --framework]')}`);
   out('');
   out(`  ${c.bold('Hub')}   ${c.grey('connect to a Vouchwell hub for your team')}`);

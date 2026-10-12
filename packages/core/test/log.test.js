@@ -695,3 +695,30 @@ test('a witness minimum that is not a non-negative integer is refused, not ignor
     assert.equal(verifyBundle(log.bundle(), { minWitnesses }).ok, false, String(minWitnesses));
   }
 });
+
+test('a pinned log key: only the key you brought counts as the log', () => {
+  const dir = tmpdir();
+  const log = ProofLog.create(dir);
+  fill(log, 4);
+  log.checkpoint();
+  const bundle = JSON.parse(JSON.stringify(log.bundle()));
+  const [[kid, publicKey]] = Object.entries(bundle.keyring);
+
+  assert.equal(verifyBundle(bundle, { trustedLogKeys: { [kid]: publicKey } }).ok, true);
+  // The same key under another name is the same key.
+  assert.equal(verifyBundle(bundle, { trustedLogKeys: { mine: publicKey } }).ok, true);
+
+  // A forger's history: perfectly well-formed, signed with a fresh key it
+  // ships in its own keyring. Unpinned, it verifies; pinned, it does not.
+  const other = ProofLog.create(tmpdir());
+  fill(other, 4);
+  other.checkpoint();
+  const forged = JSON.parse(JSON.stringify(other.bundle()));
+  assert.equal(verifyBundle(forged).ok, true);
+  const res = verifyBundle(forged, { trustedLogKeys: { [kid]: publicKey } });
+  assert.equal(res.ok, false);
+  assert.ok(res.issues.some((i) => /not a log key you pinned/.test(i)), res.issues.join('\n'));
+
+  // Pinning nothing is a mistake, not "trust anything".
+  assert.equal(verifyBundle(bundle, { trustedLogKeys: {} }).ok, false);
+});

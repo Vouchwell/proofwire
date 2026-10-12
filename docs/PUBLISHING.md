@@ -39,6 +39,27 @@ somewhere you control.
 
 ---
 
+## Releasing 0.6.0, the first as Vouchwell
+
+The code is ready: versions bumped, changelog written, preflight passing.
+These steps need accounts, in this order:
+
+1. **npm:** create the `vouchwell` org (<https://www.npmjs.com/org/create>)
+   and turn on two-factor authentication.
+2. **npm → GitHub:** a granular access token for the `vouchwell` package and
+   the `@vouchwell` org, read and write, with an expiry, saved as the
+   repository secret `NPM_TOKEN` ([Path 2](#path-2--from-ci-every-time-after-that)).
+   Or skip this and publish from your machine ([Path 1](#path-1--from-your-machine)).
+3. **PyPI:** add the pending publisher ([below](#the-python-sdk-pypi)).
+4. **Dry run:** Actions → Release → Run workflow, dry run on.
+5. **Tag:** `git tag -a v0.6.0 -m "Vouchwell 0.6.0" && git push origin v0.6.0`.
+   This publishes npm with provenance, then PyPI, then creates the GitHub
+   release. The website's install line appears by itself.
+6. **Afterwards:** deprecate the old `proofwire` packages
+   ([After the rename](#after-the-rename), step 4), and move the verify
+   action's examples from `@v0.6.0` to the release commit's full SHA if
+   you want them pinned that tightly.
+
 ## Path 1 — from your machine
 
 How 0.2.0, 0.3.0 and 0.4.0 were released. First, **bump**: write what the
@@ -248,20 +269,38 @@ at `/.well-known/proofwire`; and bundles labelled `proofwire.bundle` verify.
 The Python package lives in `sdk/python`. It's published as **`vouchwell`**
 and imported as `vouchwell`, the same name as on npm.
 
-**Once:** create an account at <https://pypi.org>, turn on two-factor
-authentication, and create an API token scoped to all projects. After the first
-upload, replace it with one scoped to `vouchwell` only.
+It is published by the same tag as npm: the `pypi` job in
+`.github/workflows/release.yml` runs after the npm packages are out, checks
+that the tag, `pyproject.toml` and `__init__.py` agree, builds the sdist and
+wheel, and uploads them with **trusted publishing**. PyPI accepts the upload
+because GitHub vouches that it comes from that workflow in this repository,
+so no PyPI token exists to leak.
 
-**Each release**, from the repository root, with the version in
-`sdk/python/pyproject.toml` and `sdk/python/src/vouchwell/__init__.py`
-matching the npm release:
+**Once, before the first release:** on <https://pypi.org>, with two-factor
+authentication on, open **Your account → Publishing → Add a new pending
+publisher** and enter exactly:
+
+| Field | Value |
+| --- | --- |
+| PyPI project name | `vouchwell` |
+| Owner | `Vouchwell` |
+| Repository name | `vouchwell` |
+| Workflow name | `release.yml` |
+| Environment name | `pypi` |
+
+A pending publisher reserves nothing. The first successful upload creates the
+project, and until then anyone could register the name. So do this shortly
+before tagging. In GitHub, **Settings → Environments → `pypi`** (created on the
+first run) can additionally require a reviewer to approve each upload.
+
+**By hand, if ever needed** (from the repository root):
 
 ```bash
 cd sdk/python
 python -m pip install --upgrade build twine
 python -m build                      # sdist and wheel into dist/
 python -m twine check dist/*
-python -m twine upload dist/*        # asks for the token; username __token__
+python -m twine upload dist/*        # a PyPI API token; username __token__
 ```
 
 Check it installs cleanly:

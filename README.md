@@ -379,7 +379,7 @@ Prove
   vw verify                      audit the local log end to end  [--fail-on-unfinished]
   vw prove <seq>                 inclusion proof for one receipt
   vw export [file]               evidence bundle for a third party
-  vw check <file>                verify a bundle with nothing but itself
+  vw check <file>                verify a bundle with nothing but itself [--log-key kid=pub --json]
   vw report                      evidence pack for auditors (AI Act, SOC 2); see docs/EVIDENCE.md
 
 Hub
@@ -465,13 +465,27 @@ runs, and gets a receipt:
 
 See [`docs/CODING-AGENTS.md`](docs/CODING-AGENTS.md).
 
+### Check it in CI
+
+Commit the log as a bundle and let every push check it. The
+[verify action](verify/README.md) runs the verifier from its own source: no
+install, no token. It fails the build if a bundle was edited, truncated, or
+signed by a key other than yours:
+
+```yaml
+- uses: Vouchwell/vouchwell/verify@v0.6.0
+  with:
+    log-keys: evidence/log-keys.json   # from `vw keys`
+```
+
 ### How this repository was built
 
 An AI agent builds Vouchwell, and this repository records it doing so. Its
 Claude Code hooks run `vw hook` on every tool call made while working here.
 The logs are published in [`evidence/`](evidence/README.md) as bundles that
 hold commitments only, so nothing from the machine leaks. CI verifies each one
-on every push.
+on every push with the verify action, against the keys pinned in
+`evidence/log-keys.json`.
 
 ---
 

@@ -5,6 +5,17 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 
 ## Unreleased
 
+## 0.6.0 — 2026-10-12
+
+The first release as **Vouchwell**: `npm i -g vouchwell` and `pip install vouchwell`.
+Previously Proofwire; existing logs, configs and bundles keep working.
+
+- A pre-launch security audit, with every finding fixed and tested.
+- `vw hook` records and gates Claude Code's own tools.
+- A GitHub Action checks evidence bundles in CI.
+- Bundles can be pinned to the log's own key.
+- The website is now at <https://vouchwell.axonscape.com/>.
+
 ### Security
 
 Fixes from the pre-launch security audit. Each has a regression test
@@ -54,6 +65,22 @@ Fixes from the pre-launch security audit. Each has a regression test
   - out-of-range paging values are clamped.
 
 ### Added
+
+- **GitHub Action: `Vouchwell/vouchwell/verify`.** Checks evidence bundles
+  in any repository's CI and fails the build if one was edited, truncated,
+  or signed by an unexpected key. Problems are annotated on the file and
+  totals go in the job summary. It runs the verifier from the action's own
+  tagged source, with no install, no registry and no token. This repository's
+  CI now checks its own evidence with it. See
+  [`verify/README.md`](verify/README.md).
+- **Pin the log's own key: `vw check --log-key kid=publicKey`** (or
+  `--log-keys file`), and `trustedLogKeys` in `verifyBundle`. Without it, a
+  bundle proves only that *someone* signed a consistent history: a forger can
+  sign one with a fresh key and ship that key inside the bundle. With it,
+  every receipt and log signature must come from a key you brought. Unpinned,
+  `vw check` now names the key so it can be compared with `vw keys` and then
+  pinned.
+- **`vw check --json`**, one line of machine-readable results.
 
 - **`vw hook` stays fast however large the log grows.** Every hook call used
   to read and hash the whole log, which took 0.5 s at 5,000 receipts, twice

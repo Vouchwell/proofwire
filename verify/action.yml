@@ -1,0 +1,61 @@
+name: Vouchwell verify
+description: Verify Vouchwell evidence bundles in CI, so a log of what AI agents did cannot be edited without the build saying so.
+author: Vouchwell
+branding:
+  icon: check-circle
+  color: green
+
+# Runs the verifier from this action's own tagged source: no package install,
+# no registry, no network. What checks your bundles is exactly the code at the
+# ref you pinned. Node 20.11 or later must be on the PATH, as it is on
+# GitHub-hosted runners.
+inputs:
+  bundles:
+    description: Bundle files to check. Glob patterns (`*`, `**`, `?`), one per line or space-separated, relative to the workspace.
+    default: evidence/*.json
+  log-key:
+    description: >-
+      The log's signing key(s), as kid=publicKey (comma-separated for several).
+      Get it from the log's owner with `vw keys`. Without it a bundle only
+      proves someone signed it; with it, that you did.
+    default: ''
+  log-keys:
+    description: 'Path to a JSON file of log keys: { "kid": "publicKey" }, or [ { "kid": …, "publicKey": … } ].'
+    default: ''
+  witnesses:
+    description: Witness signatures required on a checkpoint covering each bundle. Needs witness-key or witness-keys.
+    default: '0'
+  witness-key:
+    description: Trusted witness key(s), as kid=publicKey (comma-separated).
+    default: ''
+  witness-keys:
+    description: Path to a JSON file of trusted witness keys, in the same forms as log-keys. Revoked entries are skipped.
+    default: ''
+  allow-empty:
+    description: Pass when no file matches. Off by default, so a moved folder does not turn the check into a silent no-op.
+    default: 'false'
+
+outputs:
+  verified:
+    description: How many bundles verified.
+    value: ${{ steps.verify.outputs.verified }}
+  failed:
+    description: How many bundles did not.
+    value: ${{ steps.verify.outputs.failed }}
+
+runs:
+  using: composite
+  steps:
+    - id: verify
+      shell: bash
+      # Inputs travel as environment variables, never spliced into the
+      # script, so a value cannot become shell code.
+      env:
+        VW_BUNDLES: ${{ inputs.bundles }}
+        VW_LOG_KEY: ${{ inputs.log-key }}
+        VW_LOG_KEYS: ${{ inputs.log-keys }}
+        VW_WITNESSES: ${{ inputs.witnesses }}
+        VW_WITNESS_KEY: ${{ inputs.witness-key }}
+        VW_WITNESS_KEYS: ${{ inputs.witness-keys }}
+        VW_ALLOW_EMPTY: ${{ inputs.allow-empty }}
+      run: node "$GITHUB_ACTION_PATH/run.mjs"

@@ -96,8 +96,12 @@ In `vouchwell.config.json`:
 
 ```bash
 vw hook evidence            # checkpoint, then write evidence/<log id>.json
-vw check evidence/*.json    # what anyone can run against it
+vw keys                     # this log's signing key, to publish
+vw check evidence/<log id>.json --log-key <kid>=<publicKey>   # what anyone can run against it
 ```
+
+To check it on every push, use the [GitHub Action](../verify/README.md) with the
+key pinned in `evidence/log-keys.json`.
 
 The bundle holds no payloads and no salts.
 
