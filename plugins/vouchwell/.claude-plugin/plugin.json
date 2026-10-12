@@ -1,0 +1,32 @@
+{
+  "name": "vouchwell",
+  "displayName": "Vouchwell",
+  "version": "0.6.0",
+  "description": "Tamper-evident receipts for every tool call Claude Code makes: shell commands, file reads and edits, web fetches, MCP tools. A policy decides before each call runs; every call leaves a signed, hash-chained receipt anyone can verify offline.",
+  "author": { "name": "Vouchwell", "url": "https://vouchwell.axonscape.com" },
+  "homepage": "https://vouchwell.axonscape.com",
+  "repository": "https://github.com/Vouchwell/vouchwell",
+  "license": "Apache-2.0",
+  "keywords": ["audit-log", "policy", "security", "compliance", "provenance", "hooks"],
+  "userConfig": {
+    "mode": {
+      "type": "string",
+      "title": "Mode",
+      "description": "enforce: the policy can refuse a call or ask you first. monitor: record everything, block nothing. off: do nothing. A project with its own vouchwell.config.json uses that instead.",
+      "options": ["enforce", "monitor", "off"],
+      "default": "enforce"
+    },
+    "log_dir": {
+      "type": "directory",
+      "title": "Log folder",
+      "description": "Where receipts are kept for projects without their own Vouchwell config. Empty means ~/.vouchwell/claude-code.",
+      "default": ""
+    },
+    "policy": {
+      "type": "file",
+      "title": "Policy file",
+      "description": "A Vouchwell policy to use instead of the bundled one (coding-agent + shell-safety). Make one with: vw policy template <ids> --out <file>",
+      "default": ""
+    }
+  }
+}

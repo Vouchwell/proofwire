@@ -7,6 +7,42 @@ a command before and after every tool call (its
 [hooks](https://docs.claude.com/en/docs/claude-code/hooks)), and `vw hook` is
 that command.
 
+## The Claude Code plugin
+
+The plugin needs no global install and no settings to edit. In Claude Code:
+
+```
+/plugin marketplace add Vouchwell/vouchwell
+/plugin install vouchwell@vouchwell
+```
+
+When the next session starts, the plugin installs the `vouchwell` npm package
+of its own version into its data folder. It is a fixed, registry-verified build,
+not whatever `vw` is on your PATH. From then on, every tool call goes through
+`vw hook`:
+
+- **Where receipts go.** A project with its own `vouchwell.config.json` keeps
+  full control: its log, policy and monitor setting. Every other project is
+  recorded in one log for you, `~/.vouchwell/claude-code`. That folder is
+  outside every repository, so a signing key can't be committed by accident.
+  It is also outside the plugin's own folder, so uninstalling the plugin never
+  deletes an audit trail.
+- **What it enforces.** The bundled policy is the `coding-agent` and
+  `shell-safety` templates.
+- **Options** (in `/plugin`, select Vouchwell):
+  - `mode`: `enforce` (the default), `monitor` (record everything, block
+    nothing) or `off`;
+  - `log_dir`: where the log is kept;
+  - `policy`: a policy file to use instead of the bundled one.
+- **Fails closed when enforcing.** If the CLI isn't installed yet, for
+  example with no network at session start, calls are refused with a reason
+  telling you to restart or switch to `monitor`.
+- **Asking about the log.** The plugin's skill answers questions like "what
+  did you do?", "prove the log is intact" and "export the evidence", using
+  read-only commands.
+
+## The CLI, per project
+
 ```bash
 npm install -g vouchwell
 vw policy template coding-agent shell-safety secrets --out vouchwell.policy.json

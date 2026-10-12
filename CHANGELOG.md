@@ -6,6 +6,13 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 ## Unreleased
 
 ### Added
+- **A Claude Code plugin.** `/plugin marketplace add Vouchwell/vouchwell`, then
+  `/plugin install vouchwell@vouchwell`, records and gates every tool call with
+  nothing else to install or configure. It installs the CLI of its own version
+  into its data folder, records into `~/.vouchwell/claude-code` unless a project
+  has its own config, enforces the `coding-agent` and `shell-safety` templates
+  by default (options: monitor, off, log folder, policy), and adds a skill that
+  shows, verifies and exports the log. `npm run bump` keeps its version in step.
 - **A 30-second demo video** on the website and in the README: unedited
   `npm run demo` output.
 - **`llms.txt`, `robots.txt` and a sitemap on the website.** `llms.txt` tells
@@ -26,6 +33,8 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 
 ### Fixed
 
+- **`vw hook` with no policy file wrote a note to stdout,** where Claude Code
+  reads the hook's JSON answer. It now goes to stderr.
 - **`vw hook` could lose a receipt when tool calls ran in parallel.** A
   waiting hook that found the lock's holder had exited would delete the lock,
   even if, in that instant, another hook had just taken it. Two hooks then

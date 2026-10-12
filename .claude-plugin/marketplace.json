@@ -1,0 +1,14 @@
+{
+  "name": "vouchwell",
+  "description": "Vouchwell: tamper-evident receipts and policy for what AI agents do.",
+  "owner": { "name": "Vouchwell", "url": "https://vouchwell.axonscape.com" },
+  "plugins": [
+    {
+      "name": "vouchwell",
+      "source": "./plugins/vouchwell",
+      "description": "Record and gate every tool call Claude Code makes, with signed receipts anyone can verify.",
+      "category": "security",
+      "tags": ["audit", "policy", "compliance", "security"]
+    }
+  ]
+}
