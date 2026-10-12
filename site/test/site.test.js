@@ -41,7 +41,7 @@ const sourceOf = (file) => DEPLOYED[file] ?? `site/${file}`;
 /** Every file the page pulls in, as paths under site/. */
 function referencedFiles() {
   const refs = [
-    ...attrs(INDEX, 'href'), ...attrs(INDEX, 'src'),
+    ...attrs(INDEX, 'href'), ...attrs(INDEX, 'src'), ...attrs(INDEX, 'poster'),
     ...[...FONTS_CSS.matchAll(/url\("([^"]+)"\)/g)].map((m) => `fonts/${m[1]}`),
     ...[...APP.matchAll(/fetch\('([^']+)'\)/g)].map((m) => m[1]),
     ...[...APP.matchAll(/from '(\.[^']+)'/g)].map((m) => m[1]),

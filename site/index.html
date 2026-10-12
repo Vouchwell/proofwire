@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <!-- Enforces what the page says: a bundle pasted here is parsed in the browser and goes
      nowhere. Scripts only from this origin, and the only requests it may make are to it. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vouchwell — tamper-evident receipts for AI agents</title>
 <meta name="description" content="Every AI agent action, policy-gated before it runs and cryptographically provable afterwards. Open source, no dependencies, verifiable by someone who has every reason to distrust you.">
@@ -112,6 +112,7 @@
 
   section { padding-block: clamp(50px, 8vw, 88px); }
   .divide { border-top: 1px solid var(--rule); }
+  .demo video { display: block; width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 10px; background: #0b0f17; }
 
   /* ── terminals ── */
   .term { background: var(--paper); border: 1px solid var(--rule); border-radius: 3px; font-family: var(--mono); font-size: .77rem; line-height: 1.75; overflow-x: auto; margin: 0; }
@@ -328,7 +329,7 @@
         <span>pre-1.0</span>
         <span>Apache-2.0</span>
         <span>no dependencies</span>
-        <span>270+ tests</span>
+        <span>570+ tests</span>
         <span><a href="#limits">not yet independently reviewed</a></span>
       </p>
     </div>
@@ -360,6 +361,15 @@
     </div>
   </div>
 </div>
+
+<div class="divide"></div>
+
+<!-- ── demo ─────────────────────────────────────────────────────────── -->
+<section class="wrap demo" id="demo">
+  <h2>See it run.</h2>
+  <p class="lede measure">Thirty seconds of <code>npm run demo</code>, unedited: an agent works through a queue, policy blocks three actions, then the log is attacked four ways and every attack is caught.</p>
+  <video controls muted playsinline preload="none" poster="demo-poster.jpg" src="demo.mp4" aria-label="Terminal recording of npm run demo"></video>
+</section>
 
 <div class="divide"></div>
 

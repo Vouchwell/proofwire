@@ -17,6 +17,8 @@ Run it standalone on one machine, or as a **hub** your whole organisation
 writes to — with shared policy, an approvals inbox, tenant isolation, and
 independent witnesses that make a hosted log worth believing.
 
+[![30-second demo: an agent's actions are policy-gated, then its log is attacked four ways and every attack is caught](site/demo-poster.jpg)](https://vouchwell.axonscape.com/#demo)
+
 **[Check a real log in your browser →](https://vouchwell.axonscape.com/)** Then try to cheat it: edit a
 receipt, cut the tail off, invent your own witnesses. Nothing you paste leaves
 the page.
