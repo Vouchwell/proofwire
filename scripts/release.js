@@ -14,6 +14,7 @@ import { launchSpec } from '../packages/proxy/src/proxy.js';
  *
  *     node scripts/release.js --dry-run    what would happen
  *     node scripts/release.js              do it
+ *     node scripts/release.js --resume     finish one already (partly) published
  *
  * npm is effectively write-once: `npm unpublish` is allowed for 72 hours and
  * the name is held forever either way. So everything that can be verified
@@ -45,6 +46,10 @@ const CYAN = (s) => `[36m${s}[0m`;
 
 const dryRun = process.argv.includes('--dry-run');
 const skipTests = process.argv.includes('--skip-tests');
+// Finishing a release, not starting one: CI after a version was published by
+// hand, or a re-run after a partial failure. A version already wholly on the
+// registry then means "done", not "you forgot to bump".
+const resume = process.argv.includes('--resume');
 // With 2FA on (it should be), npm wants a one-time code per publish. Either pass
 // one here, or leave it out and npm prompts, which needs the terminal attached.
 const otp = process.argv.find((a) => a.startsWith('--otp='))?.slice('--otp='.length);
@@ -184,7 +189,9 @@ function preflight() {
     blocking.push(`Fix the version files. \`npm run bump -- <new version>\` sets them all at once.`);
   }
   const published = ORDER.filter((r) => alreadyPublished(manifest(r).name, version));
-  if (published.length === ORDER.length) {
+  if (published.length === ORDER.length && resume) {
+    console.log(`  ${GREEN('✓')} npm    ${version} is already published, every package of it; nothing to do`);
+  } else if (published.length === ORDER.length) {
     console.log(`  ${RED('✗')} npm    ${version} is already published, every package of it`);
     blocking.push(`${version} is out already. Bump to the next version first:  npm run bump -- ${nextPatch(version)}`);
   } else if (published.length) {

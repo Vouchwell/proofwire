@@ -13,6 +13,18 @@ on:
         description: 'Preflight only, publish nothing'
         type: boolean
         default: true
+      tag:
+        description: >-
+          Finish the release of an existing tag (e.g. v0.6.0): build from that
+          tag, skip what npm already has, then PyPI and the GitHub release.
+          Empty: a preflight of main.
+        type: string
+        default: ''
+
+# The tag being released: the pushed one, or the one named when finishing a
+# release by hand. Empty for a plain dry run of main.
+env:
+  RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.tag }}
 
 # Read-only by default; the publish job asks for exactly what it needs.
 permissions:
@@ -28,6 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag || github.ref }}
           # The suite replays witnesses/keys.json's whole history.
           fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -60,6 +73,8 @@ jobs:
       HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
@@ -68,9 +83,9 @@ jobs:
       - run: npm ci --no-audit --no-fund
 
       - name: Confirm the tag matches the manifests
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.RELEASE_TAG != ''
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${RELEASE_TAG#v}"
           PKG=$(node -p "require('./packages/core/package.json').version")
           if [ "$TAG" != "$PKG" ]; then
             echo "::error::tag $TAG does not match package version $PKG"
@@ -80,7 +95,9 @@ jobs:
 
       - name: Publish
         if: env.HAS_NPM_TOKEN == 'true'
-        run: node scripts/release.js ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }} --skip-tests
+        # --resume: when finishing a tag, a version already wholly on npm
+        # (published by hand, or by an earlier attempt) is done, not an error.
+        run: node scripts/release.js ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }} ${{ env.RELEASE_TAG != '' && '--resume' || '' }} --skip-tests
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           # Attach provenance to every tarball.
@@ -89,9 +106,9 @@ jobs:
       - name: Or confirm it was already published by hand
         # A GitHub release says "this version exists"; it only gets made if
         # every package at the tagged version is genuinely on npm.
-        if: env.HAS_NPM_TOKEN != 'true' && startsWith(github.ref, 'refs/tags/v')
+        if: env.HAS_NPM_TOKEN != 'true' && env.RELEASE_TAG != ''
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          V="${RELEASE_TAG#v}"
           missing=0
           for p in packages/*/package.json; do
             [ "$(node -p "require('./$p').private === true")" = true ] && continue
@@ -112,18 +129,18 @@ jobs:
           fi
 
       - name: Create the GitHub release
-        if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.dry_run != 'true'
+        if: env.RELEASE_TAG != '' && github.event.inputs.dry_run != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          V="${RELEASE_TAG#v}"
           # This version's section of CHANGELOG.md, written by a person, over
           # notes generated from commit titles.
           awk -v v="$V" 'index($0, "## " v " ") == 1 { found = 1; next } found && /^## / { exit } found' CHANGELOG.md > notes.md
           if [ -s notes.md ]; then
-            gh release create "$GITHUB_REF_NAME" --verify-tag --title "Vouchwell $V" --notes-file notes.md
+            gh release create "$RELEASE_TAG" --verify-tag --title "Vouchwell $V" --notes-file notes.md
           else
-            gh release create "$GITHUB_REF_NAME" --verify-tag --title "Vouchwell $V" --generate-notes
+            gh release create "$RELEASE_TAG" --verify-tag --title "Vouchwell $V" --generate-notes
           fi
 
   pypi:
@@ -132,7 +149,7 @@ jobs:
     # from this workflow in this repository, so no PyPI token is stored
     # anywhere. Configured once on PyPI; see docs/PUBLISHING.md.
     needs: publish
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: (startsWith(github.ref, 'refs/tags/v') || inputs.tag != '') && github.event.inputs.dry_run != 'true'
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -143,6 +160,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -150,7 +168,7 @@ jobs:
 
       - name: Confirm the tag matches the Python package
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${RELEASE_TAG#v}"
           PY=$(sed -n 's/^version = "\(.*\)"$/\1/p' sdk/python/pyproject.toml)
           INIT=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' sdk/python/src/vouchwell/__init__.py)
           if [ "$TAG" != "$PY" ] || [ "$TAG" != "$INIT" ]; then

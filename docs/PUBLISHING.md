@@ -157,6 +157,15 @@ with provenance, and creates the GitHub release from that version's
 
 Try it first with **Actions → Release → Run workflow → dry run: true**.
 
+### Finishing a release that stopped halfway
+
+If npm was published by hand (or an attempt failed after some packages went
+out), finish from **Actions → Release → Run workflow** with **tag** set to the
+release's tag, say `v0.6.0`, and **dry run** off. It builds from that tag,
+skips every package npm already has (`release.js --resume`), then uploads the
+Python SDK to PyPI and creates the GitHub release. A tag push does the same, so
+re-running a failed tag build also resumes rather than demanding a new version.
+
 ---
 
 ## After the first publish
