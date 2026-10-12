@@ -205,6 +205,28 @@ test('the site names its own domain as its address, and nothing on github.io', (
   }
 });
 
+test('llms.txt, robots.txt and the sitemap describe this site, and every link in them resolves', () => {
+  // llms.txt is how AI agents and assistants learn what Vouchwell is; a link
+  // to a moved document would teach them something false.
+  const SITE_URL = 'https://vouchwell.axonscape.com/';
+  const llms = read('llms.txt');
+  assert.match(llms, /^# Vouchwell\n\n> /, 'llms.txt opens with the name and a one-paragraph summary');
+  for (const [, url] of llms.matchAll(/\]\((https:\/\/github\.com\/Vouchwell\/vouchwell\/blob\/main\/[^)]+)\)/g)) {
+    const file = url.replace('https://github.com/Vouchwell/vouchwell/blob/main/', '');
+    assert.ok(existsSync(path.join(ROOT, file)), `llms.txt links to ${file}, which does not exist`);
+  }
+  for (const [, url] of [...llms.matchAll(/\]\((https?:\/\/[^)]+)\)/g)]) {
+    if (url.includes('axonscape.com')) assert.ok(url.startsWith(SITE_URL), `${url} is not on ${SITE_URL}`);
+  }
+  assert.match(read('robots.txt'), new RegExp(`Sitemap: ${SITE_URL}sitemap.xml`));
+  const locs = [...read('sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  assert.ok(locs.length > 0 && locs.every((u) => u.startsWith(SITE_URL)), `sitemap: ${locs}`);
+  for (const u of locs) {
+    const rel = u.slice(SITE_URL.length) || 'index.html';
+    assert.ok(existsSync(path.join(SITE, rel)), `sitemap lists ${u}, which is not published`);
+  }
+});
+
 test('the page is well-formed enough to be found and shared', () => {
   assert.match(INDEX, /<html lang="en">/);
   assert.match(INDEX, /<meta name="viewport" content="width=device-width, initial-scale=1">/);

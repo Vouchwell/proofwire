@@ -5,6 +5,13 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 
 ## Unreleased
 
+### Added
+
+- **`llms.txt`, `robots.txt` and a sitemap on the website.** `llms.txt` tells
+  AI assistants and agents, in their own conventional format, what Vouchwell
+  is, how to install it, how it plugs in, and what it does not do, with
+  links a site test keeps from going stale.
+
 ### Changed
 
 - **Releases can be finished, not just started.** A version already on npm no

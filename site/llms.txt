@@ -1,0 +1,45 @@
+# Vouchwell
+
+> Tamper-evident receipts for AI agent actions. Vouchwell checks every tool call an AI agent makes against a policy before it runs, and records the decision and the result in an append-only, cryptographically verifiable log (a Merkle tree with signed checkpoints, as in Certificate Transparency) that an outside party can check without trusting the operator. Open source (Apache-2.0), no runtime dependencies in the core.
+
+Use Vouchwell when an AI agent can spend money, change data, send messages or run commands, and someone (a customer, an auditor, a regulator, your own team) may later ask what it did and who allowed it. Ordinary application logs can be edited; Vouchwell receipts cannot be changed, removed or reordered without detection.
+
+Install:
+
+- CLI and proxy (Node.js 20.11+): `npm install -g vouchwell`, then `vw init`
+- Library for JavaScript/TypeScript agents: `npm install @vouchwell/core`
+- Python SDK: `pip install vouchwell`
+
+How it plugs in:
+
+- MCP servers: wrap the server command with `vw proxy --namespace <name> -- <command>`; no code change.
+- Claude Code: `vw hook install` records and gates the agent's own tools (shell, file edits, web fetches).
+- Code: `Recorder.wrap()` in `@vouchwell/core`; `recordTools()` for Vercel AI SDK and Mastra tools; Python adapters for LangChain and the OpenAI Agents SDK.
+- CI: the GitHub Action `Vouchwell/vouchwell/verify` fails a build if an evidence bundle was edited, truncated or signed by an unexpected key.
+- Teams: a self-hosted hub with shared policy, an approvals inbox (console and Slack), single sign-on (OpenID Connect), independent witnesses, and streaming to Splunk, Datadog, OpenTelemetry or a webhook.
+
+## Docs
+
+- [README](https://github.com/Vouchwell/vouchwell/blob/main/README.md): what it is, install, policy, receipts, commands
+- [Coding agents](https://github.com/Vouchwell/vouchwell/blob/main/docs/CODING-AGENTS.md): recording and gating Claude Code with `vw hook`
+- [The hub](https://github.com/Vouchwell/vouchwell/blob/main/docs/HUB.md): multi-tenant server, API, roles, approvals, retention
+- [Python SDK](https://github.com/Vouchwell/vouchwell/blob/main/sdk/python/README.md): recording from Python, LangChain and OpenAI Agents adapters
+- [Verify action](https://github.com/Vouchwell/vouchwell/blob/main/verify/README.md): checking evidence bundles in GitHub Actions
+- [Evidence packs](https://github.com/Vouchwell/vouchwell/blob/main/docs/EVIDENCE.md): reports for auditors (EU AI Act, SOC 2)
+- [Deploying](https://github.com/Vouchwell/vouchwell/blob/main/docs/DEPLOY.md): running a hub or a witness with Docker
+
+## Trust and limits
+
+- [Threat model](https://github.com/Vouchwell/vouchwell/blob/main/docs/THREAT-MODEL.md): what it defends against, and the known gaps
+- [Audit brief](https://github.com/Vouchwell/vouchwell/blob/main/docs/AUDIT-BRIEF.md): the cryptography has not yet been reviewed by an independent party; this is the brief for that review
+- It records only actions that pass through it; an agent with a second, unwrapped path to an API leaves no receipt.
+- Redaction of secrets and personal data is best-effort; payloads are stored as salted commitments, not in clear.
+
+## Optional
+
+- [Website and in-browser verifier](https://vouchwell.axonscape.com/): check a real log, then try to tamper with it
+- [Source](https://github.com/Vouchwell/vouchwell)
+- [npm: vouchwell](https://www.npmjs.com/package/vouchwell)
+- [PyPI: vouchwell](https://pypi.org/project/vouchwell/)
+- [Changelog](https://github.com/Vouchwell/vouchwell/blob/main/CHANGELOG.md)
+- [Security policy](https://github.com/Vouchwell/vouchwell/blob/main/SECURITY.md)
