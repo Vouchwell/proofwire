@@ -125,3 +125,43 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" --verify-tag --title "Vouchwell $V" --generate-notes
           fi
+
+  pypi:
+    # The Python SDK, at the same version, after npm succeeded. Trusted
+    # publishing: PyPI accepts this upload because GitHub vouches it comes
+    # from this workflow in this repository, so no PyPI token is stored
+    # anywhere. Configured once on PyPI; see docs/PUBLISHING.md.
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/vouchwell
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Confirm the tag matches the Python package
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PY=$(sed -n 's/^version = "\(.*\)"$/\1/p' sdk/python/pyproject.toml)
+          INIT=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' sdk/python/src/vouchwell/__init__.py)
+          if [ "$TAG" != "$PY" ] || [ "$TAG" != "$INIT" ]; then
+            echo "::error::tag $TAG, pyproject.toml $PY, __init__.py $INIT: all three must agree"
+            exit 1
+          fi
+
+      - name: Build the sdist and wheel
+        run: |
+          python -m pip install --disable-pip-version-check build==1.2.2.post1
+          python -m build sdk/python --outdir dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

@@ -511,6 +511,39 @@ function verifyBundleUnchecked(bundle, opts = {}) {
     return { ok: false, issues: ['not a Vouchwell v1 bundle'], checked: 0 };
   }
   const keyring = bundle.keyring ?? {};
+
+  // The log's own key, pinned by the verifier. Without it, a bundle proves
+  // only that *someone* signed this history: a forger can sign a history of
+  // their own with a fresh key and ship that key in the keyring. With it,
+  // every receipt and every log signature on a checkpoint has to come from a
+  // key the verifier brought. Compared by public key, so a pinned key under
+  // a different kid still counts and a known kid with a swapped key does not.
+  if (opts.trustedLogKeys !== undefined) {
+    const pinned = opts.trustedLogKeys && typeof opts.trustedLogKeys === 'object'
+      ? new Set(Object.values(opts.trustedLogKeys).filter((k) => typeof k === 'string' && k))
+      : new Set();
+    if (pinned.size === 0) {
+      return { ok: false, issues: ['trustedLogKeys was given but names no key'], checked: 0 };
+    }
+    /** @type {Set<string>} */
+    const signers = new Set();
+    for (const e of Array.isArray(bundle.entries) ? bundle.entries : []) {
+      const kid = e?.receipt?.attest?.kid;
+      if (typeof kid === 'string') signers.add(kid);
+    }
+    for (const cp of Array.isArray(bundle.checkpoints) ? bundle.checkpoints : []) {
+      for (const sig of Array.isArray(cp?.sigs) ? cp.sigs : []) {
+        if (sig?.role === 'log' && typeof sig.kid === 'string') signers.add(sig.kid);
+      }
+    }
+    for (const kid of [...signers].sort()) {
+      const pub = Object.prototype.hasOwnProperty.call(keyring, kid) ? keyring[kid] : undefined;
+      if (typeof pub !== 'string' || !pinned.has(pub)) {
+        issues.push(`signed with key ${kid}, which is not a log key you pinned — this may be someone else's history`);
+      }
+    }
+  }
+
   let root;
   try {
     root = unhex(bundle.root);
@@ -801,6 +834,9 @@ function anchorCheckpoints({ bundle, root, treeSize, prefixRoots, checkpointResu
  *   signatures on every checkpoint. Needs `trustedWitnesses`.
  * @param {Record<string, string>} [opts.trustedWitnesses]  kid → public key
  *   (base64url) of the witnesses you chose, obtained from outside the bundle.
+ * @param {Record<string, string>} [opts.trustedLogKeys]  kid → public key
+ *   (base64url) of the log's own signing key(s). When given, everything the
+ *   log signed must be signed by one of them.
  * @returns {{ ok: boolean, issues: string[], checked: number }}
  */
 export function verifyBundle(bundle, opts = {}) {

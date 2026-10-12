@@ -110,16 +110,13 @@ jobs:
           fi
       - name: Verify the evidence of how Vouchwell was built
         # One bundle per recorded log: every tool call an agent made working
-        # on this repository (evidence/README.md). Each must verify on its own.
-        run: |
-          shopt -s nullglob
-          bundles=(evidence/*.json)
-          if [ ${#bundles[@]} -eq 0 ]; then echo "no evidence yet — skipping"; exit 0; fi
-          for b in "${bundles[@]}"; do
-            echo "::group::$b"
-            node packages/cli/src/bin.js check "$b"
-            echo "::endgroup::"
-          done
+        # on this repository (evidence/README.md). Checked by this repository's
+        # own action, as anyone else's CI would check theirs, with the log keys
+        # pinned in evidence/log-keys.json: a bundle signed by any other key
+        # fails, so a new key has to arrive as a reviewed change to that file.
+        uses: ./verify
+        with:
+          log-keys: evidence/log-keys.json
 
   load:
     runs-on: ubuntu-latest

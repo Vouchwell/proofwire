@@ -1,20 +1,19 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "vouchwell"
-version = "0.5.0"
+version = "0.6.0"
 description = "Tamper-evident receipts for AI agent actions. Python SDK, wire-compatible with the vouchwell CLI."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "IdeaboticsAI" }]
 keywords = ["ai-agents", "audit", "transparency-log", "merkle", "ed25519", "eu-ai-act"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Topic :: Security :: Cryptography",
   "Topic :: System :: Logging",

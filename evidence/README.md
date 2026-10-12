@@ -44,7 +44,11 @@ CI checks every bundle on every push.
   machine that recorded it. The bundle proves the log is internally
   consistent, and that it matches the key it names. Two things tie that key to
   this project:
-  - the bundle arrived by a commit to this repository;
+  - the bundle arrived by a commit to this repository, and its key is pinned
+    in [`log-keys.json`](log-keys.json). CI checks every bundle against that
+    file with the [verify action](../verify/README.md), so a bundle signed
+    by any other key fails, and a new key has to be added there in a reviewed
+    change;
   - once the project runs a witness, the witness's co-signature on the
     checkpoints, which a verifier can pin (`--witness-key`).
 
@@ -59,6 +63,11 @@ session, run:
 ```bash
 npm run evidence            # checkpoint, then write evidence/<log id>.json
 ```
+
+A session on a new machine starts a new log with a new key, and CI fails its
+bundle until that key is in [`log-keys.json`](log-keys.json). Add it in the
+same change, from `vw keys --config .claude/vouchwell.config.json`, so a reviewer sees a
+new signer arrive rather than having it slip in.
 
 The live log, its signing key and its salts stay in `.claude/vouchwell-log/`,
 which git ignores.
