@@ -173,21 +173,30 @@ canonical address, and `site/test` holds it to that.
 Setting the domain up takes two account actions, which CI cannot do:
 
 1. **DNS**, at whoever serves `axonscape.com`: a `CNAME` record named
-   `vouchwell` pointing to `proofwire.github.io` (the organisation's
-   `github.io` host; after a rename to `vouchwell`, to `vouchwell.github.io`).
-   Remove any `A` or `AAAA` record for `vouchwell`, which would conflict.
-2. **GitHub**:
+   `vouchwell` pointing to `vouchwell.github.io`, the organisation's
+   `github.io` host. Remove any `A` or `AAAA` record for `vouchwell`, which
+   would conflict. Never leave it pointing at `proofwire.github.io`: since
+   the rename that host belongs to nobody here, and whoever registers a
+   `proofwire` account could serve pages on this domain.
+2. **GitHub**, in **this** repository (`Vouchwell/vouchwell`):
    - Settings → Pages → Custom domain → `vouchwell.axonscape.com` → Save.
      With a workflow deploy GitHub ignores a `CNAME` file, so the setting is
      the only place the domain lives.
+   - Not in `Vouchwell.github.io`. A domain set there makes the redirect
+     page answer at the domain's root, and that page redirects to the
+     domain's root: a loop. (It also moves this site to `/vouchwell/`, since
+     an organisation site's domain serves its project sites under their
+     names.) GitHub lets one repository hold a domain at a time; if this
+     one says the domain is taken, remove it from the other first.
    - Once the DNS check passes, tick **Enforce HTTPS**.
    - Then, in the organisation's Settings → Pages, **verify** `axonscape.com`.
      A verified domain cannot be claimed by another GitHub account if this
      site's setting is ever removed, which closes the subdomain-takeover gap.
 
 When the domain is set, GitHub redirects the old project address
-(`…github.io/proofwire/`) to it. The bare hostname is served by the one-file
-redirect repository `proofwire.github.io`, which sends it to the same place.
+(`vouchwell.github.io/vouchwell/`) to it. The bare hostname,
+`vouchwell.github.io`, is served by the one-file redirect repository
+`Vouchwell.github.io`, which sends it to the same place.
 
 The repository was transferred from a personal account, which left three things
 worth knowing:
@@ -205,7 +214,9 @@ worth knowing:
 
 Once, in this order. Each is an account action, so none can be done from CI.
 
-1. **GitHub.** Rename the organisation `proofwire` to `vouchwell`
+1. **GitHub.** *Done:* the organisation, this repository and the redirect
+   repository are now `Vouchwell`, `vouchwell` and `Vouchwell.github.io`.
+   Rename the organisation `proofwire` to `vouchwell`
    (Settings → Rename organization), then the repository `proofwire` to
    `vouchwell`, and `proofwire.github.io` to `vouchwell.github.io`. GitHub
    redirects the old repository URLs, so existing clones and links keep
