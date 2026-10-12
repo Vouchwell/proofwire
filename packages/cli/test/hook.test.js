@@ -165,16 +165,47 @@ test('tool arguments are previewed and tool output is not, by default; "none" ke
 test('parallel tool calls from one session, each its own process, keep one unbroken chain', async () => {
   const cwd = project();
   const n = 8;
+  /** @type {string[]} */
+  const said = [];
   await Promise.all(Array.from({ length: n }, (_, i) => new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [BIN, 'hook'], { cwd, env: { ...process.env, HOME: cwd, NO_COLOR: '1', VOUCHWELL_HOOK: '' } });
+    let output = '';
+    child.stdout.on('data', (d) => (output += d));
+    child.stderr.on('data', (d) => (output += d));
     child.on('error', reject);
-    child.on('close', resolve);
+    child.on('close', (code) => {
+      said.push(`#${i} exit ${code}: ${output.trim()}`);
+      resolve(undefined);
+    });
     child.stdin.end(event('PreToolUse', BASH(`echo ${i}`, `par${i}`)));
   })));
-  assert.equal(entries(cwd).length, n);
+  // On failure, what each hook said: a lost receipt should name its cause.
+  assert.equal(entries(cwd).length, n, said.join('\n'));
   const verify = vw(cwd, ['verify']);
   assert.equal(verify.code, 0, verify.stdout + verify.stderr);
   assert.ok(!fs.existsSync(path.join(cwd, '.vouchwell', 'hook.lock')), 'the lock is released');
+});
+
+test("a dead holder's lock is taken over only once it has gone stale, never a fresh one", () => {
+  // The holder read from the lock may have exited and a new writer taken the
+  // lock since: deleting it then would let two writers append at once.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vw-lock-'));
+  const lock = path.join(dir, 'hook.lock');
+  const dead = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout;
+  fs.writeFileSync(lock, dead);
+
+  const before = process.env.VOUCHWELL_HOOK_LOCK_WAIT_MS;
+  process.env.VOUCHWELL_HOOK_LOCK_WAIT_MS = '300';
+  try {
+    assert.throws(() => withLock(dir, () => 'x'), /stayed locked/, 'a fresh lock is waited for, even with a dead holder');
+    const old = new Date(Date.now() - 5000);
+    fs.utimesSync(lock, old, old);
+    assert.equal(withLock(dir, () => 'taken over'), 'taken over', 'a stale one is taken over');
+  } finally {
+    if (before === undefined) delete process.env.VOUCHWELL_HOOK_LOCK_WAIT_MS;
+    else process.env.VOUCHWELL_HOOK_LOCK_WAIT_MS = before;
+  }
+  assert.ok(!fs.existsSync(lock));
 });
 
 test("Windows' delete-pending lock file is waited out, not taken as a failure", () => {

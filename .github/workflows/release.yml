@@ -93,10 +93,29 @@ jobs:
           fi
           echo "releasing $PKG"
 
+      - name: Is this version already on npm?
+        # Checked here rather than left to release.js: when finishing a tag,
+        # the checkout is that tag, and its release.js may predate --resume.
+        # Anonymous, and not through npm: setup-node's .npmrc sends its
+        # placeholder token, which the registry can answer with a 401.
+        id: npm
+        if: env.RELEASE_TAG != ''
+        run: |
+          V="${RELEASE_TAG#v}"
+          all=true
+          for p in packages/*/package.json; do
+            [ "$(node -p "require('./$p').private === true")" = true ] && continue
+            n="$(node -p "require('./$p').name")"
+            status="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/${n/\//%2f}/$V")"
+            echo "$n@$V: HTTP $status"
+            [ "$status" = 200 ] || all=false
+          done
+          echo "published=$all" >> "$GITHUB_OUTPUT"
+
       - name: Publish
-        if: env.HAS_NPM_TOKEN == 'true'
-        # --resume: when finishing a tag, a version already wholly on npm
-        # (published by hand, or by an earlier attempt) is done, not an error.
+        if: env.HAS_NPM_TOKEN == 'true' && steps.npm.outputs.published != 'true'
+        # --resume: a version already wholly on npm (published by hand, or by
+        # an earlier attempt) is done, not an error.
         run: node scripts/release.js ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }} ${{ env.RELEASE_TAG != '' && '--resume' || '' }} --skip-tests
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
