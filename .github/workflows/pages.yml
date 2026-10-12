@@ -50,7 +50,9 @@ jobs:
         run: |
           repo="$(npm view vouchwell repository.url 2>/dev/null || true)"
           ver="$(npm view vouchwell version 2>/dev/null || true)"
-          if [[ "$repo" == *"github.com/${GITHUB_REPOSITORY}"* && "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          # GitHub names are case-insensitive: the organisation is
+          # "Vouchwell", the packages say "vouchwell". Compared lower-case.
+          if [[ "${repo,,}" == *"github.com/${GITHUB_REPOSITORY,,}"* && "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             printf '{ "npm": "%s" }\n' "$ver" > site/release.json
           else
             printf '{ "npm": null }\n' > site/release.json
