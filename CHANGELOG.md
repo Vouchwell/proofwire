@@ -5,6 +5,13 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 
 ## Unreleased
 
+### Changed
+
+- **Releases can be finished, not just started.** A version already on npm no
+  longer stops the release workflow when it is finishing a tag: it skips npm
+  and goes on to PyPI and the GitHub release. **Actions → Release → Run
+  workflow** takes a `tag` to finish one by hand.
+
 ## 0.6.0 — 2026-10-12
 
 The first release as **Vouchwell**: `npm i -g vouchwell` and `pip install vouchwell`.
