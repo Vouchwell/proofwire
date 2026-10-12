@@ -6,7 +6,8 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 ## Unreleased
 
 ### Added
-
+- **A 30-second demo video** on the website and in the README: unedited
+  `npm run demo` output.
 - **`llms.txt`, `robots.txt` and a sitemap on the website.** `llms.txt` tells
   AI assistants and agents, in their own conventional format, what Vouchwell
   is, how to install it, how it plugs in, and what it does not do, with
