@@ -520,14 +520,33 @@ function holderAlive(text) {
 }
 
 /**
+ * Whether a failure to create the lock file means "someone else has it, try
+ * again" rather than a real error.
+ *
+ * On Windows, a file deleted while another process still has it open stays
+ * "delete pending" until that handle closes, and creating the same name in
+ * that window fails with EPERM or EACCES, not EEXIST. A writer releasing the
+ * lock while a waiting one reads it to see who holds it is exactly that, and
+ * treating it as fatal lost a parallel tool call's receipt.
+ *
+ * @param {string | undefined} code
+ * @param {string} [platform]
+ */
+export function lockIsBusy(code, platform = process.platform) {
+  if (code === 'EEXIST') return true;
+  return platform === 'win32' && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY');
+}
+
+/**
  * Run `fn` holding the log's hook lock: one writer at a time.
  *
  * @template T
  * @param {string} dir
  * @param {() => T} fn
+ * @param {{ platform?: string }} [opts]  For tests.
  * @returns {T}
  */
-export function withLock(dir, fn) {
+export function withLock(dir, fn, opts = {}) {
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, LOCK);
   const waitMs = Number(process.env.VOUCHWELL_HOOK_LOCK_WAIT_MS) || 15_000;
@@ -538,17 +557,19 @@ export function withLock(dir, fn) {
       fs.writeFileSync(file, String(process.pid), { flag: 'wx' });
       break;
     } catch (e) {
-      if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EEXIST') throw e;
+      const code = /** @type {NodeJS.ErrnoException} */ (e).code;
+      if (!lockIsBusy(code, opts.platform)) throw e;
       // A writer that died holding the lock must not stop every later one.
       // The lock names its holder, so a dead holder's lock is taken over.
-      if (!holderAlive(readIfPresent(file))) fs.rmSync(file, { force: true });
-      if (Date.now() > deadline) throw new Error(`the log at ${dir} stayed locked for ${waitMs / 1000}s`);
+      if (code === 'EEXIST' && !holderAlive(readIfPresent(file))) fs.rmSync(file, { force: true, maxRetries: 5, retryDelay: 20 });
+      if (Date.now() > deadline) throw new Error(`the log at ${dir} stayed locked for ${waitMs / 1000}s (last: ${code})`);
       Atomics.wait(nap, 0, 0, 20);
     }
   }
   try {
     return fn();
   } finally {
-    fs.rmSync(file, { force: true });
+    // Retried, for the same Windows reason: a reader can be holding it.
+    fs.rmSync(file, { force: true, maxRetries: 5, retryDelay: 20 });
   }
 }

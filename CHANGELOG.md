@@ -137,6 +137,12 @@ Fixes from the pre-launch security audit. Each has a regression test
 
 ### Changed
 
+- **`vw hook` on Windows no longer drops a parallel tool call's receipt.**
+  When one hook process released the lock while another was reading it,
+  Windows briefly refused to recreate the file (EPERM), and that call failed
+  instead of waiting its turn. In enforce mode it was refused, and never
+  recorded. Those errors now mean "wait", as they do for the operating system.
+
 - **The website moved to <https://vouchwell.axonscape.com/>.** It is still
   deployed by the same tested workflow; only the address changed. The old
   `github.io` addresses redirect there. Setup steps are in
