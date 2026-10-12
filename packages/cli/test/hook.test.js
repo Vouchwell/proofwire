@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ProofLog, entryHash, verifyBundle, composePolicy } from '@vouchwell/core';
+import { withLock, lockIsBusy } from '../src/hook.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BIN = path.resolve(HERE, '../src/bin.js');
@@ -174,6 +175,40 @@ test('parallel tool calls from one session, each its own process, keep one unbro
   const verify = vw(cwd, ['verify']);
   assert.equal(verify.code, 0, verify.stdout + verify.stderr);
   assert.ok(!fs.existsSync(path.join(cwd, '.vouchwell', 'hook.lock')), 'the lock is released');
+});
+
+test("Windows' delete-pending lock file is waited out, not taken as a failure", () => {
+  // Releasing the lock while another process reads it leaves the file
+  // "delete pending" on Windows, and creating it then fails with EPERM. That
+  // was treated as fatal, and one of eight parallel calls lost its receipt.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vw-lock-'));
+  const real = fs.writeFileSync;
+  const pending = (/** @type {number} */ times) => {
+    let left = times;
+    return mock.method(fs, 'writeFileSync', (/** @type {any[]} */ ...a) => {
+      if (String(a[0]).endsWith('hook.lock') && left-- > 0) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+      return real.apply(fs, /** @type {any} */ (a));
+    });
+  };
+
+  let m = pending(3);
+  try {
+    assert.equal(withLock(dir, () => 'recorded', { platform: 'win32' }), 'recorded');
+  } finally {
+    m.mock.restore();
+  }
+  assert.ok(!fs.existsSync(path.join(dir, 'hook.lock')), 'and the lock is released');
+
+  // Elsewhere EPERM is a real permission problem, and is reported at once.
+  m = pending(1);
+  try {
+    assert.throws(() => withLock(dir, () => 'x', { platform: 'linux' }), /EPERM/);
+  } finally {
+    m.mock.restore();
+  }
+  assert.equal(lockIsBusy('EEXIST', 'linux'), true);
+  assert.equal(lockIsBusy('EACCES', 'win32'), true);
+  assert.equal(lockIsBusy('ENOENT', 'win32'), false);
 });
 
 test("a lock left by a writer that died is taken over; a live writer's is waited for", () => {

@@ -128,12 +128,28 @@ function preflight() {
         `  ${GREEN('✓')} scope  @vouchwell reachable ${DIM(`(${Object.keys(orgs).length} member(s))`)}`,
       );
     } catch {
-      console.log(`  ${YELLOW('!')} scope  cannot read the @vouchwell org`);
-      blocking.push(
-        'Create the free org at https://www.npmjs.com/org/create (name: vouchwell).\n' +
-          '     Without it, the four @vouchwell/* packages cannot be published.\n' +
-          '     The unscoped `vouchwell` CLI depends on two of them, so it would be uninstallable.',
-      );
+      // A publish-only token (an npm granular token without organization
+      // access, which is what CI should hold) cannot list the org's members.
+      // A package already published under the scope proves it exists; whether
+      // this token may publish to it, npm answers at publish time.
+      const scoped = ORDER.map((rel) => manifest(rel).name).filter((n) => n.startsWith('@vouchwell/'));
+      const existing = scoped.find((n) => {
+        try {
+          return Boolean(run('npm', ['view', n, 'name']).trim());
+        } catch {
+          return false;
+        }
+      });
+      if (existing) {
+        console.log(`  ${GREEN('✓')} scope  @vouchwell exists ${DIM(`(${existing} is on the registry; this token cannot list the org)`)}`);
+      } else {
+        console.log(`  ${YELLOW('!')} scope  cannot read the @vouchwell org`);
+        blocking.push(
+          'Create the free org at https://www.npmjs.com/org/create (name: vouchwell).\n' +
+            '     Without it, the four @vouchwell/* packages cannot be published.\n' +
+            '     The unscoped `vouchwell` CLI depends on two of them, so it would be uninstallable.',
+        );
+      }
     }
   }
 
