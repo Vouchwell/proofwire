@@ -59,18 +59,11 @@ jobs:
     permissions:
       # write, because the last step creates the GitHub release.
       contents: write
-      # Required for npm provenance: the tarball is signed against this run,
-      # so anyone can check which commit and workflow produced it.
+      # npm trusted publishing: GitHub vouches that the upload comes from this
+      # workflow in this repository, and npm, configured once per package to
+      # expect it, needs no token. The same identity signs each tarball's
+      # provenance, so anyone can check which commit and run produced it.
       id-token: write
-    env:
-      # Whether an NPM_TOKEN secret exists, as a flag of its own. Branching on
-      # NODE_AUTH_TOKEN does not work: actions/setup-node sets it to a
-      # placeholder (XXXXX-XXXXX-XXXXX-XXXXX) when no token is configured, so it
-      # is never empty — which is how the 0.3.0 tag push ran Publish without a
-      # token. Without one, a release is published from a maintainer's machine
-      # (`npm run release`, with a 2FA code) and only then tagged; see
-      # docs/PUBLISHING.md.
-      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -81,6 +74,12 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - run: npm ci --no-audit --no-fund
+
+      - name: Use an npm that can publish without a token
+        # Trusted publishing needs npm 11.5.1 or later; pinned, like the actions.
+        run: |
+          npm install -g npm@11.6.2 --no-audit --no-fund
+          npm --version
 
       - name: Confirm the tag matches the manifests
         if: env.RELEASE_TAG != ''
@@ -113,39 +112,35 @@ jobs:
           echo "published=$all" >> "$GITHUB_OUTPUT"
 
       - name: Publish
-        if: env.HAS_NPM_TOKEN == 'true' && steps.npm.outputs.published != 'true'
-        # --resume: a version already wholly on npm (published by hand, or by
-        # an earlier attempt) is done, not an error.
-        run: node scripts/release.js ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }} ${{ env.RELEASE_TAG != '' && '--resume' || '' }} --skip-tests
+        if: steps.npm.outputs.published != 'true'
+        # No token: npm checks this workflow's identity (trusted publishing,
+        # docs/PUBLISHING.md). --resume: packages already on npm are skipped.
+        run: node scripts/release.js ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }} ${{ env.RELEASE_TAG != '' && '--resume' || '' }} --trusted-publishing --skip-tests
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # Attach provenance to every tarball.
           NPM_CONFIG_PROVENANCE: true
 
-      - name: Or confirm it was already published by hand
+      - name: Confirm every package is on npm
         # A GitHub release says "this version exists"; it only gets made if
-        # every package at the tagged version is genuinely on npm.
-        if: env.HAS_NPM_TOKEN != 'true' && env.RELEASE_TAG != ''
+        # every package at the tagged version is genuinely on npm. A package
+        # can take a minute or two to appear after publishing, so this waits.
+        if: env.RELEASE_TAG != '' && github.event.inputs.dry_run != 'true'
         run: |
           V="${RELEASE_TAG#v}"
-          missing=0
-          for p in packages/*/package.json; do
-            [ "$(node -p "require('./$p').private === true")" = true ] && continue
-            n="$(node -p "require('./$p').name")"
-            # Anonymous, and not through npm: setup-node's .npmrc sends its
-            # placeholder token, which the registry can answer with a 401.
-            status="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/${n/\//%2f}/$V")"
-            if [ "$status" = 200 ]; then
-              echo "on npm: $n@$V"
-            else
-              echo "::error::$n@$V is not on npm"
-              missing=1
-            fi
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            missing=0
+            for p in packages/*/package.json; do
+              [ "$(node -p "require('./$p').private === true")" = true ] && continue
+              n="$(node -p "require('./$p').name")"
+              # Anonymous, and not through npm: setup-node's .npmrc sends its
+              # placeholder token, which the registry can answer with a 401.
+              status="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/${n/\//%2f}/$V")"
+              if [ "$status" = 200 ]; then echo "on npm: $n@$V"; else echo "not yet: $n@$V"; missing=1; fi
+            done
+            [ "$missing" = 0 ] && exit 0
+            sleep 20
           done
-          if [ "$missing" != 0 ]; then
-            echo "::error::Publish $V first (npm run release), then push the tag — or add an NPM_TOKEN secret."
-            exit 1
-          fi
+          echo "::error::$V is not on npm for every package. Publish it (npm run release), then re-run this workflow with tag v$V."
+          exit 1
 
       - name: Create the GitHub release
         if: env.RELEASE_TAG != '' && github.event.inputs.dry_run != 'true'

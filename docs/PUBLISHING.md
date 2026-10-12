@@ -39,26 +39,22 @@ somewhere you control.
 
 ---
 
-## Releasing 0.6.0, the first as Vouchwell
+## Releasing, in short
 
-The code is ready: versions bumped, changelog written, preflight passing.
-These steps need accounts, in this order:
+0.6.0 was the first release as Vouchwell: npm, PyPI and the GitHub release
+are out. From here a release is a version bump and a tag:
 
-1. **npm:** create the `vouchwell` org (<https://www.npmjs.com/org/create>)
-   and turn on two-factor authentication.
-2. **npm → GitHub:** a granular access token for the `vouchwell` package and
-   the `@vouchwell` org, read and write, with an expiry, saved as the
-   repository secret `NPM_TOKEN` ([Path 2](#path-2--from-ci-every-time-after-that)).
-   Or skip this and publish from your machine ([Path 1](#path-1--from-your-machine)).
-3. **PyPI:** add the pending publisher ([below](#the-python-sdk-pypi)).
-4. **Dry run:** Actions → Release → Run workflow, dry run on.
-5. **Tag:** `git tag -a v0.6.0 -m "Vouchwell 0.6.0" && git push origin v0.6.0`.
-   This publishes npm with provenance, then PyPI, then creates the GitHub
-   release. The website's install line appears by itself.
-6. **Afterwards:** deprecate the old `proofwire` packages
-   ([After the rename](#after-the-rename), step 4), and move the verify
-   action's examples from `@v0.6.0` to the release commit's full SHA if
-   you want them pinned that tightly.
+1. `npm run bump -- 0.6.1`, then commit and merge it.
+2. Push the tag: `git tag -a v0.6.1 -m "Vouchwell 0.6.1" && git push origin v0.6.1`.
+   The release workflow tests on three operating systems, publishes the five
+   npm packages and the Python SDK (both with no token, by trusted
+   publishing), and creates the GitHub release. The website's install line
+   follows by itself.
+
+This needs the npm trusted publishers ([Path 2](#path-2--from-ci-every-time-after-that))
+and the PyPI one ([below](#the-python-sdk-pypi)) to be in place. If a run
+stops halfway, [finish it](#finishing-a-release-that-stopped-halfway) rather
+than bumping again.
 
 ## Path 1 — from your machine
 
@@ -86,10 +82,9 @@ section, or a Python SDK at a different number. Forgetting to bump used to
 look like a successful release that skipped every package.
 
 Tag *after* publishing. The tag push runs `.github/workflows/release.yml`,
-which, with no `NPM_TOKEN` secret, re-runs the suite on three operating
-systems, confirms every package at the tagged version is genuinely on npm, and
-creates the GitHub release from that version's `CHANGELOG.md` section. Push
-the tag first and it fails, saying what isn't published yet.
+which re-runs the suite on three operating systems, sees every package at the
+tagged version already on npm and skips publishing, then uploads the Python
+SDK and creates the GitHub release from that version's `CHANGELOG.md` section.
 
 ### First time only: create the scope
 
@@ -130,13 +125,29 @@ tagged commit anyone can inspect, npm records **provenance attestations**
 linking each tarball to the workflow run that produced it, and no long-lived
 credential sits on a laptop.
 
-### Setup, once
+### Setup, once: npm trusted publishing
 
-1. On npm: **Access Tokens → Generate New Token → Granular Access Token**.
-   Scope it to the `vouchwell` packages and the `@vouchwell` org, with
-   *Read and write*. Set an expiry.
-2. On GitHub: **Settings → Secrets and variables → Actions → New repository
-   secret**, named `NPM_TOKEN`.
+There is no npm token. npm accepts an upload because GitHub vouches that it
+comes from `.github/workflows/release.yml` in this repository, so there is
+nothing to steal and no two-factor code to type; provenance is attached
+automatically. On <https://www.npmjs.com>, for **each** of the five packages
+(`vouchwell`, `@vouchwell/core`, `@vouchwell/proxy`, `@vouchwell/dashboard`,
+`@vouchwell/server`): **Settings → Trusted Publisher → GitHub Actions**, and
+enter exactly:
+
+| Field | Value |
+| --- | --- |
+| Organization or user | `Vouchwell` |
+| Repository | `vouchwell` |
+| Workflow filename | `release.yml` |
+| Environment | leave empty |
+
+Then, on the same page, set **Publishing access** to *Require two-factor
+authentication and disallow tokens*. Trusted publishing keeps working, and no
+token, leaked or forgotten, can publish these packages again.
+
+Publishing by hand ([Path 1](#path-1--from-your-machine)) stays possible with
+your login and two-factor code, for emergencies.
 
 ### Releasing
 
@@ -152,8 +163,8 @@ the old version, so the new CLI would install the old core.)
 
 The tag triggers `.github/workflows/release.yml`, which re-runs the full suite
 on three operating systems, checks the tag matches the manifests, publishes
-with provenance, and creates the GitHub release from that version's
-`CHANGELOG.md` section.
+with provenance, waits until every package is visible on npm, and creates the
+GitHub release from that version's `CHANGELOG.md` section.
 
 Try it first with **Actions → Release → Run workflow → dry run: true**.
 

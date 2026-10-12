@@ -11,6 +11,10 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
   longer stops the release workflow when it is finishing a tag: it skips npm
   and goes on to PyPI and the GitHub release. **Actions → Release → Run
   workflow** takes a `tag` to finish one by hand.
+- **npm releases use trusted publishing; there is no npm token.** npm accepts
+  uploads from the release workflow because GitHub vouches for it, as PyPI
+  already did. The workflow waits until every package is visible on npm before
+  creating the GitHub release. Setup: `docs/PUBLISHING.md`, Path 2.
 
 ### Fixed
 

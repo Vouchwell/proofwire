@@ -15,6 +15,7 @@ import { launchSpec } from '../packages/proxy/src/proxy.js';
  *     node scripts/release.js --dry-run    what would happen
  *     node scripts/release.js              do it
  *     node scripts/release.js --resume     finish one already (partly) published
+ *     node scripts/release.js --trusted-publishing   in CI: npm checks the workflow, no login
  *
  * npm is effectively write-once: `npm unpublish` is allowed for 72 hours and
  * the name is held forever either way. So everything that can be verified
@@ -50,6 +51,10 @@ const skipTests = process.argv.includes('--skip-tests');
 // hand, or a re-run after a partial failure. A version already wholly on the
 // registry then means "done", not "you forgot to bump".
 const resume = process.argv.includes('--resume');
+// npm trusted publishing: in the release workflow there is no npm login. npm
+// checks, at publish time, that the upload comes from that workflow in this
+// repository (configured once per package on npmjs.com), so nothing to steal.
+const trusted = process.argv.includes('--trusted-publishing');
 // With 2FA on (it should be), npm wants a one-time code per publish. Either pass
 // one here, or leave it out and npm prompts, which needs the terminal attached.
 const otp = process.argv.find((a) => a.startsWith('--otp='))?.slice('--otp='.length);
@@ -115,18 +120,22 @@ function preflight() {
 
   // 1. Authenticated?
   let who = null;
-  try {
-    who = run('npm', ['whoami']).trim();
-    console.log(`  ${GREEN('✓')} npm    authenticated as ${B(who)}`);
-  } catch {
-    console.log(`  ${RED('✗')} npm    not logged in`);
-    blocking.push(
-      'Run `npm login` first. Publishing needs credentials this script will not ask you for.',
-    );
+  if (trusted) {
+    console.log(`  ${GREEN('✓')} npm    trusted publishing ${DIM('(npm verifies this workflow when it publishes; no login)')}`);
+  } else {
+    try {
+      who = run('npm', ['whoami']).trim();
+      console.log(`  ${GREEN('✓')} npm    authenticated as ${B(who)}`);
+    } catch {
+      console.log(`  ${RED('✗')} npm    not logged in`);
+      blocking.push(
+        'Run `npm login` first. Publishing needs credentials this script will not ask you for.',
+      );
+    }
   }
 
   // 2. Does the scope exist and can this account write to it?
-  if (who) {
+  if (who || trusted) {
     try {
       const orgs = JSON.parse(run('npm', ['org', 'ls', 'vouchwell', '--json']));
       console.log(
