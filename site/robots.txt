@@ -1,0 +1,5 @@
+# Everything here is public, for people and for crawlers alike.
+User-agent: *
+Allow: /
+
+Sitemap: https://vouchwell.axonscape.com/sitemap.xml
