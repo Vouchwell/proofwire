@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Vouchwell/vouchwell/verify@v0.6.0   # better: the release's full commit SHA
+      - uses: Vouchwell/vouchwell/verify@v0.7.0   # better: the release's full commit SHA
         with:
           log-keys: evidence/log-keys.json
 ```

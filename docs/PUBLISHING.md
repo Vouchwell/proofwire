@@ -210,7 +210,7 @@ Registry (registry.modelcontextprotocol.io). The entry runs `npx vouchwell mcp`.
 The registry accepts it only when two things are true:
 - the npm package of that version carries
   `"mcpName": "io.github.Vouchwell/vouchwell"`. `packages/cli/package.json` has
-  it from the release after 0.6.0 on, so publish after that release, not before;
+  it from 0.7.0 on, so publish after that release is on npm, not before;
 - whoever publishes can sign in to GitHub as a member of the `Vouchwell`
   organization.
 
