@@ -485,7 +485,7 @@ install, no token. It fails the build if a bundle was edited, truncated, or
 signed by a key other than yours:
 
 ```yaml
-- uses: Vouchwell/vouchwell/verify@v0.7.0
+- uses: Vouchwell/vouchwell/verify@v0.8.0
   with:
     log-keys: evidence/log-keys.json   # from `vw keys`
 ```

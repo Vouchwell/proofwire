@@ -1,6 +1,6 @@
 {
   "name": "vouchwell",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "description": "Tamper-evident receipts for AI agent actions. Policy, proof, and audit for MCP.",
   "mcpName": "io.github.Vouchwell/vouchwell",
@@ -31,8 +31,8 @@
     "src"
   ],
   "dependencies": {
-    "@vouchwell/core": "0.7.0",
-    "@vouchwell/proxy": "0.7.0"
+    "@vouchwell/core": "0.8.0",
+    "@vouchwell/proxy": "0.8.0"
   },
   "engines": {
     "node": ">=20.11"
