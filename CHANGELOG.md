@@ -5,6 +5,14 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 
 ## Unreleased
 
+## 0.7.0 — 2026-10-13
+
+Vouchwell reaches agents where they already are:
+
+- **A Claude Code plugin:** two commands, nothing to configure.
+- **`vw mcp`,** so any MCP client can show and prove what its agent did.
+- **An MCP Registry entry,** ready to publish.
+
 ### Added
 
 - **`vw mcp`: a log as an MCP server.** Any MCP client can call `log_entries`,
