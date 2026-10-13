@@ -10,9 +10,14 @@ hash-chained receipt, and its policy can refuse a call or ask the user first.
 A refusal reason that starts with "Vouchwell" or names a rule such as
 `coding-agent.secret-files` came from that policy, not from Claude Code.
 
-Run these commands exactly as written. They only read the log or write a copy
-of it. Never open, edit, move or delete the log files directly: the policy
-refuses it, and an edited log stops verifying.
+Use the plugin's Vouchwell MCP tools. Every one of them reads the log and
+none can change it: `log_entries` (with `denied`, `would_block`, `unfinished`,
+`target` or `session` to narrow it), `verify_log`, `log_stats`, `check_bundle`
+(pin the signer with `log_keys`), and `export_evidence` (writes a new bundle
+file, never overwrites one).
+
+If those tools are not available (the MCP server failed to start), the same
+answers come from these commands. Run them exactly as written:
 
 ```bash
 VW='node "${CLAUDE_PLUGIN_ROOT}/scripts/vouchwell.mjs" --data "${CLAUDE_PLUGIN_DATA}"'
@@ -30,6 +35,9 @@ VW='node "${CLAUDE_PLUGIN_ROOT}/scripts/vouchwell.mjs" --data "${CLAUDE_PLUGIN_D
 | Check a bundle someone gave them | `$VW check <file>` |
 | An auditor's report (AI Act, SOC 2) | `$VW report --out <file>` |
 | The public key to publish for verifiers | `$VW keys` |
+
+Never open, edit, move or delete the log files directly: the policy refuses
+it, and an edited log stops verifying.
 
 When you report results:
 
