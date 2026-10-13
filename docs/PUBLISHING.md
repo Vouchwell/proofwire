@@ -203,6 +203,29 @@ Then the things that are not automatable and are worth doing deliberately:
       [`AUDIT-BRIEF.md`](AUDIT-BRIEF.md) — the one remaining blocker for a
       hosted service, and the thing to do before charging anyone.
 
+## The MCP Registry
+
+`server.json` at the repository root is Vouchwell's entry in the official MCP
+Registry (registry.modelcontextprotocol.io). The entry runs `npx vouchwell mcp`.
+The registry accepts it only when two things are true:
+- the npm package of that version carries
+  `"mcpName": "io.github.Vouchwell/vouchwell"`. `packages/cli/package.json` has
+  it from the release after 0.6.0 on, so publish after that release, not before;
+- whoever publishes can sign in to GitHub as a member of the `Vouchwell`
+  organization.
+
+`npm run bump` moves the versions in `server.json` with everything else. After
+each release:
+
+```bash
+brew install mcp-publisher        # or the binary from the registry's GitHub releases
+mcp-publisher login github         # opens the browser; use an account in the Vouchwell org
+mcp-publisher publish              # reads ./server.json
+```
+
+Directories that mirror the registry (GitHub's MCP listing, PulseMCP and
+others) pick the entry up from there.
+
 ## The website's address
 
 The site is at <https://vouchwell.axonscape.com/>. It is still built and

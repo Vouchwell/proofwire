@@ -3,6 +3,7 @@
   "version": "0.6.0",
   "type": "module",
   "description": "Tamper-evident receipts for AI agent actions. Policy, proof, and audit for MCP.",
+  "mcpName": "io.github.Vouchwell/vouchwell",
   "license": "Apache-2.0",
   "author": "IdeaboticsAI",
   "repository": {

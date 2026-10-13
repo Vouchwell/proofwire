@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bumpFiles, versionProblems, compareVersions, hasSection, PACKAGES, PLUGIN } from './bump.mjs';
+import { bumpFiles, versionProblems, compareVersions, hasSection, PACKAGES, PLUGIN, SERVER } from './bump.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -15,7 +15,7 @@ function fixture() {
     fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
     fs.copyFileSync(path.join(ROOT, rel), path.join(dir, rel));
   };
-  for (const rel of ['package.json', 'CHANGELOG.md', 'sdk/python/pyproject.toml', 'sdk/python/src/vouchwell/__init__.py', PLUGIN]) copy(rel);
+  for (const rel of ['package.json', 'CHANGELOG.md', 'sdk/python/pyproject.toml', 'sdk/python/src/vouchwell/__init__.py', PLUGIN, SERVER]) copy(rel);
   for (const p of PACKAGES) copy(`${p}/package.json`);
   return dir;
 }
@@ -52,6 +52,9 @@ test('a bump moves every version, every internal pin, the Python SDK and the CHA
   assert.match(changelog, new RegExp(`## Unreleased\\n\\n## ${to.replace(/\./g, '\\.')} — 2030-01-02\\n\\n### Added\\n\\n- something`));
   assert.match(fs.readFileSync(path.join(dir, 'sdk/python/pyproject.toml'), 'utf8'), new RegExp(`^version = "${to}"$`, 'm'));
   assert.equal(JSON.parse(fs.readFileSync(path.join(dir, PLUGIN), 'utf8')).version, to, 'the plugin installs the CLI of its own version');
+  const server = JSON.parse(fs.readFileSync(path.join(dir, SERVER), 'utf8'));
+  assert.equal(server.version, to);
+  assert.equal(server.packages[0].version, to, 'the registry entry runs the release it describes');
 });
 
 test('a bump refuses to go backwards, to repeat itself, or to release nothing', () => {

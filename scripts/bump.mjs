@@ -20,6 +20,7 @@ import { launchSpec } from '../packages/proxy/src/proxy.js';
  *   - sdk/python/pyproject.toml and vouchwell/__init__.py
  *   - the Claude Code plugin's plugin.json, which installs the CLI of its own
  *     version
+ *   - server.json, the MCP Registry entry, which names the npm version to run
  *   - CHANGELOG.md: the "Unreleased" section becomes "<version> — <date>",
  *     with a fresh empty "Unreleased" above it
  *   - package-lock.json, via npm, so the lockfile agrees
@@ -27,6 +28,7 @@ import { launchSpec } from '../packages/proxy/src/proxy.js';
 
 export const PACKAGES = ['packages/core', 'packages/proxy', 'packages/cli', 'packages/dashboard', 'packages/server'];
 export const PLUGIN = 'plugins/vouchwell/.claude-plugin/plugin.json';
+export const SERVER = 'server.json';
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
 
 /**
@@ -137,6 +139,14 @@ export function bumpFiles(root, version, date) {
     editJson(plugin, (json) => { json.version = version; });
     files.push(PLUGIN);
   }
+  const server = path.join(root, SERVER);
+  if (fs.existsSync(server)) {
+    editJson(server, (json) => {
+      json.version = version;
+      for (const p of json.packages ?? []) if (p.registryType === 'npm') p.version = version;
+    });
+    files.push(SERVER);
+  }
 
   fs.writeFileSync(changelog, log.replace(/^## Unreleased[ \t]*\r?\n/m, `## Unreleased\n\n## ${version} — ${date}\n`));
   files.push('CHANGELOG.md');
@@ -185,6 +195,14 @@ export function versionProblems(root) {
   if (fs.existsSync(plugin)) {
     const v = JSON.parse(fs.readFileSync(plugin, 'utf8')).version;
     if (v !== version) problems.push(`the Claude Code plugin is at ${v}, not ${version}: it would install the wrong CLI`);
+  }
+  const server = path.join(root, SERVER);
+  if (fs.existsSync(server)) {
+    const json = JSON.parse(fs.readFileSync(server, 'utf8'));
+    const npm = (json.packages ?? []).filter((/** @type {any} */ p) => p.registryType === 'npm').map((/** @type {any} */ p) => p.version);
+    if (json.version !== version || npm.some((/** @type {string} */ v) => v !== version)) {
+      problems.push(`server.json is at ${json.version} (npm ${npm.join(', ')}), not ${version}: the MCP Registry would run another version`);
+    }
   }
   return { version, problems };
 }

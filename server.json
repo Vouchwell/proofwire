@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Vouchwell/vouchwell",
+  "title": "Vouchwell",
+  "description": "Read, verify and export a tamper-evident log of what an AI agent did. Read-only.",
+  "websiteUrl": "https://vouchwell.axonscape.com",
+  "repository": {
+    "url": "https://github.com/Vouchwell/vouchwell",
+    "source": "github",
+    "subfolder": "packages/cli"
+  },
+  "version": "0.6.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "vouchwell",
+      "version": "0.6.0",
+      "transport": { "type": "stdio" },
+      "packageArguments": [
+        { "type": "positional", "value": "mcp" },
+        {
+          "type": "named",
+          "name": "--log",
+          "description": "The Vouchwell log folder to serve. Default: .vouchwell in the working directory, or the log named by vouchwell.config.json.",
+          "format": "filepath",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}
