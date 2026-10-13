@@ -29,6 +29,12 @@ import { launchSpec } from '../packages/proxy/src/proxy.js';
 export const PACKAGES = ['packages/core', 'packages/proxy', 'packages/cli', 'packages/dashboard', 'packages/server'];
 export const PLUGIN = 'plugins/vouchwell/.claude-plugin/plugin.json';
 export const SERVER = 'server.json';
+/**
+ * The repository URL every package must name, letter for letter: npm's
+ * provenance check compares it, case and all, with the GitHub repository that
+ * built the release, and refuses the upload when they differ.
+ */
+export const REPOSITORY = 'git+https://github.com/Vouchwell/vouchwell.git';
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
 
 /**
@@ -168,8 +174,13 @@ export function versionProblems(root) {
   const problems = [];
   const internal = new Set(PACKAGES.map((p) => read(p).name));
 
-  for (const rel of PACKAGES) {
+  for (const rel of ['.', ...PACKAGES]) {
     const pkg = read(rel);
+    const url = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url;
+    if (url !== REPOSITORY) {
+      problems.push(`${pkg.name ?? rel}: repository.url is ${JSON.stringify(url)}, not ${REPOSITORY}; npm would refuse its provenance`);
+    }
+    if (rel === '.') continue;
     if (pkg.version !== version) problems.push(`${pkg.name} is at ${pkg.version}, the workspace at ${version}`);
     for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
       for (const [dep, want] of Object.entries(pkg[field] ?? {})) {
