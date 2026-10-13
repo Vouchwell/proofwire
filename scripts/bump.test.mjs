@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bumpFiles, versionProblems, compareVersions, hasSection, PACKAGES } from './bump.mjs';
+import { bumpFiles, versionProblems, compareVersions, hasSection, PACKAGES, PLUGIN } from './bump.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -15,7 +15,7 @@ function fixture() {
     fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
     fs.copyFileSync(path.join(ROOT, rel), path.join(dir, rel));
   };
-  for (const rel of ['package.json', 'CHANGELOG.md', 'sdk/python/pyproject.toml', 'sdk/python/src/vouchwell/__init__.py']) copy(rel);
+  for (const rel of ['package.json', 'CHANGELOG.md', 'sdk/python/pyproject.toml', 'sdk/python/src/vouchwell/__init__.py', PLUGIN]) copy(rel);
   for (const p of PACKAGES) copy(`${p}/package.json`);
   return dir;
 }
@@ -51,6 +51,7 @@ test('a bump moves every version, every internal pin, the Python SDK and the CHA
   const changelog = fs.readFileSync(log, 'utf8');
   assert.match(changelog, new RegExp(`## Unreleased\\n\\n## ${to.replace(/\./g, '\\.')} — 2030-01-02\\n\\n### Added\\n\\n- something`));
   assert.match(fs.readFileSync(path.join(dir, 'sdk/python/pyproject.toml'), 'utf8'), new RegExp(`^version = "${to}"$`, 'm'));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, PLUGIN), 'utf8')).version, to, 'the plugin installs the CLI of its own version');
 });
 
 test('a bump refuses to go backwards, to repeat itself, or to release nothing', () => {
@@ -77,6 +78,10 @@ test('the release preflight names each kind of mismatch', () => {
   const problems = versionProblems(dir).problems.join('\n');
   assert.match(problems, /depends on @vouchwell\/core@0\.0\.1/);
   assert.match(problems, /Python SDK/);
+
+  const plugin = path.join(dir, PLUGIN);
+  fs.writeFileSync(plugin, fs.readFileSync(plugin, 'utf8').replace(/"version": "[^"]+"/, '"version": "0.0.1"'));
+  assert.match(versionProblems(dir).problems.join('\n'), /Claude Code plugin is at 0\.0\.1/);
 });
 
 test('a CHANGELOG section is matched by its exact version, nothing near it', () => {

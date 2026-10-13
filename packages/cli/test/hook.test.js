@@ -278,6 +278,14 @@ test('when enforcing, a call that cannot be recorded is refused; VOUCHWELL_HOOK=
   assert.ok(!fs.existsSync(path.join(off, '.vouchwell')));
 });
 
+test('with no policy file, stdout stays empty: it is the answer Claude Code parses', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'vouchwell-hook-'));
+  const r = vw(cwd, ['hook'], event('PreToolUse', { tool_name: 'Bash', tool_use_id: 't1', tool_input: { command: 'ls' } }));
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.stdout, '');
+  assert.match(r.stderr, /no policy file/);
+});
+
 test('events it does not handle, and input that is not an event, change nothing', () => {
   const cwd = project();
   assert.equal(vw(cwd, ['hook'], event('Stop', {})).code, 0);

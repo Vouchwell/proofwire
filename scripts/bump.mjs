@@ -18,12 +18,15 @@ import { launchSpec } from '../packages/proxy/src/proxy.js';
  *   - "version" in the root package.json and each packages/<name>/package.json
  *   - every "@vouchwell/<name>" dependency pin between them
  *   - sdk/python/pyproject.toml and vouchwell/__init__.py
+ *   - the Claude Code plugin's plugin.json, which installs the CLI of its own
+ *     version
  *   - CHANGELOG.md: the "Unreleased" section becomes "<version> — <date>",
  *     with a fresh empty "Unreleased" above it
  *   - package-lock.json, via npm, so the lockfile agrees
  */
 
 export const PACKAGES = ['packages/core', 'packages/proxy', 'packages/cli', 'packages/dashboard', 'packages/server'];
+export const PLUGIN = 'plugins/vouchwell/.claude-plugin/plugin.json';
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
 
 /**
@@ -129,6 +132,12 @@ export function bumpFiles(root, version, date) {
     files.push('sdk/python/pyproject.toml', 'sdk/python/src/vouchwell/__init__.py');
   }
 
+  const plugin = path.join(root, PLUGIN);
+  if (fs.existsSync(plugin)) {
+    editJson(plugin, (json) => { json.version = version; });
+    files.push(PLUGIN);
+  }
+
   fs.writeFileSync(changelog, log.replace(/^## Unreleased[ \t]*\r?\n/m, `## Unreleased\n\n## ${version} — ${date}\n`));
   files.push('CHANGELOG.md');
 
@@ -171,6 +180,11 @@ export function versionProblems(root) {
     const py = /^version = "([^"]+)"$/m.exec(fs.readFileSync(pyproject, 'utf8'))?.[1];
     const init = /^__version__ = "([^"]+)"$/m.exec(fs.readFileSync(path.join(root, 'sdk/python/src/vouchwell/__init__.py'), 'utf8'))?.[1];
     if (py !== version || init !== version) problems.push(`the Python SDK is at ${py} / ${init}, not ${version}`);
+  }
+  const plugin = path.join(root, PLUGIN);
+  if (fs.existsSync(plugin)) {
+    const v = JSON.parse(fs.readFileSync(plugin, 'utf8')).version;
+    if (v !== version) problems.push(`the Claude Code plugin is at ${v}, not ${version}: it would install the wrong CLI`);
   }
   return { version, problems };
 }

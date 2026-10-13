@@ -59,7 +59,10 @@ function loadPolicy(config, args) {
   if (!fs.existsSync(file)) {
     // No policy is a real choice — record everything, block nothing — but it
     // should be a visible one rather than a silent default.
-    warn(`no policy file at ${path.relative(process.cwd(), file)}; recording without enforcement`);
+    const note = `no policy file at ${path.relative(process.cwd(), file)}; recording without enforcement`;
+    // A hook's stdout is its answer to Claude Code, read as JSON: notes go to stderr.
+    if (args._?.[0] === 'hook') err(`vouchwell hook: ${note}`);
+    else warn(note);
     return new Policy({ version: 1, name: 'permissive', rules: [] });
   }
   return Policy.parse(fs.readFileSync(file, 'utf8'));

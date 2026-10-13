@@ -451,8 +451,15 @@ adapters for LangChain and the OpenAI Agents SDK.
 ## Coding agents
 
 Claude Code does most of its work with its own tools (the shell, file reads
-and edits, fetches), not MCP servers. `vw hook` records and gates those too,
-through Claude Code's hooks:
+and edits, fetches), not MCP servers. Vouchwell records and gates those too,
+through Claude Code's hooks. The quickest way is the plugin, typed in Claude Code:
+
+```
+/plugin marketplace add Vouchwell/vouchwell
+/plugin install vouchwell@vouchwell
+```
+
+Or set it up per project with the CLI:
 
 ```bash
 vw policy template coding-agent shell-safety secrets --out vouchwell.policy.json

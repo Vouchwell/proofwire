@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/vouchwell.mjs\" setup", "timeout": 180 }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/vouchwell.mjs\" hook", "timeout": 30 }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/vouchwell.mjs\" hook", "timeout": 30 }] }
+    ],
+    "PostToolUseFailure": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/vouchwell.mjs\" hook", "timeout": 30 }] }
+    ],
+    "PermissionDenied": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/vouchwell.mjs\" hook", "timeout": 30 }] }
+    ],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/vouchwell.mjs\" hook", "timeout": 30 }] }
+    ]
+  }
+}

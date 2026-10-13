@@ -13,7 +13,7 @@ Install:
 How it plugs in:
 
 - MCP servers: wrap the server command with `vw proxy --namespace <name> -- <command>`; no code change.
-- Claude Code: `vw hook install` records and gates the agent's own tools (shell, file edits, web fetches).
+- Claude Code: the plugin (`/plugin marketplace add Vouchwell/vouchwell`, then `/plugin install vouchwell@vouchwell`), or `vw hook install`, records and gates the agent's own tools (shell, file edits, web fetches).
 - Code: `Recorder.wrap()` in `@vouchwell/core`; `recordTools()` for Vercel AI SDK and Mastra tools; Python adapters for LangChain and the OpenAI Agents SDK.
 - CI: the GitHub Action `Vouchwell/vouchwell/verify` fails a build if an evidence bundle was edited, truncated or signed by an unexpected key.
 - Teams: a self-hosted hub with shared policy, an approvals inbox (console and Slack), single sign-on (OpenID Connect), independent witnesses, and streaming to Splunk, Datadog, OpenTelemetry or a webhook.
