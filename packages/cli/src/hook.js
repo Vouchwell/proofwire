@@ -32,11 +32,91 @@ import { c, out, err, ok, bad, info, heading, kv } from './ui.js';
  * Claude Code's own permission prompts still apply. An allowed call is
  * recorded, not approved: the hook says nothing and the prompt, if any, is
  * shown as usual.
+ *
+ * OpenAI's Codex CLI and Cursor run hooks too (`--client codex|cursor`). Their
+ * events are translated into the ones above on the way in, and decisions into
+ * each one's own answer on the way out; see CLIENTS.
  */
 
 const EVENTS = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionDenied', 'SessionEnd'];
 const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionDenied']);
 const PENDING = 'hook-pending.json';
+
+/**
+ * The coding agents `vw hook` speaks to. Claude Code's event names and fields
+ * are the vocabulary inside; another client's are mapped to them by
+ * normalizeEvent, and decisions go back in that client's own form (respond).
+ *
+ *   codex   the same events and fields as Claude Code, and the same answer
+ *           JSON, but a PreToolUse hook cannot answer "ask": Codex rejects it.
+ *           An escalation is refused instead, saying why. Codex has no
+ *           failure or permission-denied events; SessionEnd closes the rest.
+ *   cursor  its own camelCase events (preToolUse, postToolUse,
+ *           postToolUseFailure, sessionEnd), `conversation_id` for the
+ *           session, MCP arguments sometimes as a JSON string, and a flat
+ *           `{ permission, user_message, agent_message }` answer. Hooks may
+ *           run outside the project, so the workspace root is where it works.
+ *
+ * @type {Record<string, { label: string, canAsk: boolean, session: string, events?: Record<string, string> }>}
+ */
+export const CLIENTS = {
+  'claude-code': { label: 'Claude Code', canAsk: true, session: 'cc_' },
+  codex: { label: 'Codex', canAsk: false, session: 'codex_' },
+  cursor: {
+    label: 'Cursor',
+    canAsk: true,
+    session: 'cursor_',
+    events: { preToolUse: 'PreToolUse', postToolUse: 'PostToolUse', postToolUseFailure: 'PostToolUseFailure', sessionEnd: 'SessionEnd' },
+  },
+};
+
+/** Which client this hook serves. @param {any} args */
+function clientOf(args) {
+  const id = args.client ?? 'claude-code';
+  if (typeof id !== 'string' || !Object.hasOwn(CLIENTS, id)) {
+    throw new Error(`--client must be one of ${Object.keys(CLIENTS).join(', ')}`);
+  }
+  return id;
+}
+
+/**
+ * A client's event, in Claude Code's vocabulary. Exported for tests.
+ *
+ * @param {any} raw
+ * @param {string} client
+ */
+export function normalizeEvent(raw, client) {
+  const map = CLIENTS[client]?.events;
+  if (!map || raw === null || typeof raw !== 'object') return raw;
+  let input = raw.tool_input;
+  if (typeof input === 'string') {
+    try {
+      input = JSON.parse(input);
+    } catch {
+      // Not JSON after all: recorded as the string it is.
+    }
+  }
+  return {
+    hook_event_name: Object.hasOwn(map, raw.hook_event_name) ? map[raw.hook_event_name] : undefined,
+    session_id: raw.conversation_id ?? raw.session_id,
+    tool_name: raw.tool_name,
+    tool_use_id: raw.tool_use_id,
+    tool_input: input,
+    tool_response: raw.tool_response ?? raw.output,
+    duration_ms: raw.duration_ms ?? raw.duration,
+    error: raw.error ?? raw.error_message,
+    cwd: workspaceOf(raw),
+  };
+}
+
+/** The project a Cursor event is about. @param {any} raw */
+function workspaceOf(raw) {
+  let dir = typeof raw.cwd === 'string' && raw.cwd ? raw.cwd : Array.isArray(raw.workspace_roots) ? raw.workspace_roots[0] : undefined;
+  if (typeof dir !== 'string' || !dir) return undefined;
+  // On Windows Cursor writes roots as "/C:/Users/…".
+  if (/^\/[A-Za-z]:[\\/]/.test(dir)) dir = dir.slice(1);
+  return dir;
+}
 const LOCK = 'hook.lock';
 
 /**
@@ -72,12 +152,21 @@ export function handleEvent(args, deps, text) {
   // cannot change the environment Claude Code starts hooks with.
   if (process.env.VOUCHWELL_HOOK === 'off') return 0;
 
+  let client;
+  try {
+    client = clientOf(args);
+  } catch (e) {
+    err(`vouchwell hook: ${/** @type {Error} */ (e).message}`);
+    return 2;
+  }
+
   /** @type {any} */
   let event;
   try {
-    event = JSON.parse(text);
+    // A byte-order mark is not JSON; some clients write one on Windows.
+    event = normalizeEvent(JSON.parse(text.replace(/^\uFEFF/, '')), client);
   } catch {
-    err('vouchwell hook: expected one JSON event on stdin, from a Claude Code hook');
+    err(`vouchwell hook: expected one JSON event on stdin, from a ${CLIENTS[client].label} hook`);
     return 2;
   }
   const name = event?.hook_event_name;
@@ -88,6 +177,12 @@ export function handleEvent(args, deps, text) {
   let monitor = !args.enforce && args.monitor === true;
 
   try {
+    // Cursor may start hooks from outside the project; the event says which
+    // workspace it is about, and the project's config and log are there.
+    if (CLIENTS[client].events && args.config === undefined && args.log === undefined &&
+        typeof event.cwd === 'string' && fs.statSync(event.cwd, { throwIfNoEntry: false })?.isDirectory()) {
+      process.chdir(event.cwd);
+    }
     const { dir, config } = deps.loadConfig(args);
     const settings = { ...(config.hook ?? {}) };
     monitor = !args.enforce && (args.monitor === true || (settings.monitor ?? config.monitor) === true);
@@ -97,13 +192,14 @@ export function handleEvent(args, deps, text) {
         log,
         dir,
         monitor,
+        client,
         actor: {
-          agent: args.agent ?? settings.agent ?? 'claude-code',
+          agent: args.agent ?? settings.agent ?? client,
           runtime: `vouchwell-hook/${deps.version}`,
-          session: `cc_${event.session_id ?? 'unknown'}`,
+          session: `${CLIENTS[client].session}${event.session_id ?? 'unknown'}`,
           principal: args.principal ?? settings.principal ?? config.actor?.principal ?? 'unknown',
         },
-        namespace: args.namespace ?? settings.namespace ?? 'claude-code',
+        namespace: args.namespace ?? settings.namespace ?? client,
         previews: previewsFor(args.previews ?? settings.previews ?? 'params'),
         // Where SessionEnd writes the log as a bundle, if anywhere.
         evidence: typeof (args.evidence ?? settings.evidence) === 'string' ? (args.evidence ?? settings.evidence) : null,
@@ -117,8 +213,8 @@ export function handleEvent(args, deps, text) {
     // Refuse what cannot be recorded, when enforcing: a gate that opens
     // whenever the log is unwritable is not one. Everything else carries on.
     if (name === 'PreToolUse' && !monitor) {
-      respond('deny', `Vouchwell could not record this call, so it is refused: ${message}. ` +
-        'Fix the log, or start Claude Code with VOUCHWELL_HOOK=off to turn recording off.');
+      respond(client, 'deny', `Vouchwell could not record this call, so it is refused: ${message}. ` +
+        `Fix the log, or start ${CLIENTS[client].label} with VOUCHWELL_HOOK=off to turn recording off.`);
       return 0;
     }
     err(`vouchwell hook: ${message}`);
@@ -138,6 +234,16 @@ function pre(ctx, event, policy) {
     { kind: 'tool_call', target, params, metrics: {}, actor: ctx.actor },
     new History(ctx.log.recent(historyWindow(policy))),
   );
+  const client = CLIENTS[ctx.client];
+  if (decision.outcome === 'escalate' && !client.canAsk) {
+    // Nobody can be asked, so the call does not run without one: refused,
+    // and the reason says what a person has to do instead.
+    decision = {
+      ...decision,
+      outcome: 'deny',
+      reason: `${decision.reason} (needs a person, and ${client.label} hooks cannot ask one: run it yourself, or change the policy)`,
+    };
+  }
   if (ctx.monitor) decision = monitored(decision);
 
   const pending = readPending(ctx.dir);
@@ -145,15 +251,15 @@ function pre(ctx, event, policy) {
 
   if (decision.outcome === 'deny') {
     append(ctx, { target, params, decision, result: null, phase: 'atomic' });
-    respond('deny', `Refused by Vouchwell policy: ${decision.reason}`);
+    respond(ctx.client, 'deny', `Refused by Vouchwell policy: ${decision.reason}`);
     return 0;
   }
   if (decision.outcome === 'escalate') {
-    // Claude Code's user is the approver: they are asked, and the receipts
+    // The client's user is the approver: they are asked, and the receipts
     // are written once it is known whether the call ran.
     pending[key] = { session: ctx.actor.session, target, decision, asked: true, at: new Date().toISOString() };
     writePending(ctx.dir, pending);
-    respond('ask', `Vouchwell policy asks for a person: ${decision.reason}`);
+    respond(ctx.client, 'ask', `Vouchwell policy asks for a person: ${decision.reason}`);
     return 0;
   }
   const intent = append(ctx, { target, params, decision, result: null, phase: 'intent' });
@@ -184,10 +290,10 @@ function after(ctx, name, event) {
         result: { status: 'error', code: 'permission_denied', payload: { reason: String(event.reason ?? '') } },
       });
     } else {
-      const decision = call?.decision ?? { outcome: 'deny', policy: 'none', rules: [], reason: 'refused by Claude Code' };
+      const decision = call?.decision ?? { outcome: 'deny', policy: 'none', rules: [], reason: `refused by ${CLIENTS[ctx.client].label}` };
       append(ctx, {
         target, params, phase: 'atomic', result: null,
-        decision: { ...decision, outcome: 'deny', declined: { by: 'claude-code', at: new Date().toISOString(), note: String(event.reason ?? 'permission denied') } },
+        decision: { ...decision, outcome: 'deny', declined: { by: ctx.client, at: new Date().toISOString(), note: String(event.reason ?? 'permission denied') } },
       });
     }
     writePending(ctx.dir, pending);
@@ -201,13 +307,13 @@ function after(ctx, name, event) {
   let ref = call?.intent;
   let decision = call?.decision;
   if (call?.asked) {
-    // It ran, so the person Claude Code asked said yes.
+    // It ran, so the person the client asked said yes.
     const at = new Date().toISOString();
     decision = {
       ...call.decision,
       outcome: 'allow',
-      reason: `${call.decision.reason} — approved in Claude Code`,
-      approval: { by: 'claude-code:user', at },
+      reason: `${call.decision.reason} — approved in ${CLIENTS[ctx.client].label}`,
+      approval: { by: `${ctx.client}:user`, at },
     };
     ref = entryHash(append(ctx, { target, params, decision, result: null, phase: 'intent' }));
   }
@@ -242,7 +348,7 @@ function sessionEnd(ctx) {
     } else if (call.asked) {
       append(ctx, {
         target: call.target, params: null, phase: 'atomic', result: null,
-        decision: { ...call.decision, outcome: 'deny', declined: { by: 'claude-code:user', at: new Date().toISOString(), note: 'not approved before the session ended' } },
+        decision: { ...call.decision, outcome: 'deny', declined: { by: `${ctx.client}:user`, at: new Date().toISOString(), note: 'not approved before the session ended' } },
       });
     }
     delete pending[key];
@@ -256,15 +362,37 @@ function sessionEnd(ctx) {
 
 // ──────────────────────────────────────────────────────────── commands ──
 
-/** Where Claude Code's settings for this install live. @param {any} args */
-function settingsPath(args) {
-  if (args.user) return path.join(os.homedir(), '.claude', 'settings.json');
-  return path.resolve('.claude', args.local ? 'settings.local.json' : 'settings.json');
+/**
+ * Where the client's hook settings for this install live.
+ *
+ * @param {any} args
+ * @param {string} client
+ */
+function settingsPath(args, client) {
+  if (client === 'claude-code') {
+    if (args.user) return path.join(os.homedir(), '.claude', 'settings.json');
+    return path.resolve('.claude', args.local ? 'settings.local.json' : 'settings.json');
+  }
+  if (args.local) throw new Error(`--local is a Claude Code setting; ${CLIENTS[client].label} has a project file (default) and a user one (--user)`);
+  const folder = client === 'codex' ? '.codex' : '.cursor';
+  return args.user ? path.join(os.homedir(), folder, 'hooks.json') : path.resolve(folder, 'hooks.json');
 }
 
-/** @param {any} args */
-function hookCommand(args) {
-  return typeof args.command === 'string' ? args.command : `vw hook${args.monitor === true ? ' --monitor' : ''}`;
+/** @param {any} args @param {string} client */
+function hookCommand(args, client) {
+  if (typeof args.command === 'string') return args.command;
+  return `vw hook${client === 'claude-code' ? '' : ` --client ${client}`}${args.monitor === true ? ' --monitor' : ''}`;
+}
+
+/**
+ * The events a client is hooked on, in its own names.
+ *
+ * @param {string} client
+ */
+function hookedEvents(client) {
+  if (client === 'cursor') return Object.keys(/** @type {Record<string, string>} */ (CLIENTS.cursor.events));
+  if (client === 'codex') return EVENTS.filter((e) => e !== 'PostToolUseFailure' && e !== 'PermissionDenied');
+  return EVENTS;
 }
 
 /** @param {string} file */
@@ -280,18 +408,22 @@ function readSettings(file) {
 
 /**
  * Take this command's entries out of a settings object, leaving everything
- * else as it was.
+ * else as it was. Claude Code and Codex group hooks under matchers; Cursor
+ * lists them per event.
  *
  * @param {any} settings
  * @param {string} command
+ * @param {string} client
  */
-function withoutOurs(settings, command) {
+function withoutOurs(settings, command, client) {
   const hooks = { ...(settings.hooks ?? {}) };
-  for (const event of EVENTS) {
+  for (const event of hookedEvents(client)) {
     if (!Array.isArray(hooks[event])) continue;
-    const kept = hooks[event]
-      .map((/** @type {any} */ group) => ({ ...group, hooks: (group.hooks ?? []).filter((/** @type {any} */ h) => h?.command !== command) }))
-      .filter((/** @type {any} */ group) => group.hooks.length > 0);
+    const kept = client === 'cursor'
+      ? hooks[event].filter((/** @type {any} */ h) => h?.command !== command)
+      : hooks[event]
+        .map((/** @type {any} */ group) => ({ ...group, hooks: (group.hooks ?? []).filter((/** @type {any} */ h) => h?.command !== command) }))
+        .filter((/** @type {any} */ group) => group.hooks.length > 0);
     if (kept.length) hooks[event] = kept;
     else delete hooks[event];
   }
@@ -300,20 +432,31 @@ function withoutOurs(settings, command) {
 
 /** @param {any} args */
 function install(args) {
-  const file = settingsPath(args);
-  const command = hookCommand(args);
+  const client = clientOf(args);
+  const label = CLIENTS[client].label;
+  const file = settingsPath(args, client);
+  const command = hookCommand(args, client);
   const settings = readSettings(file);
-  const hooks = withoutOurs(settings, command);
-  for (const event of EVENTS) {
+  const hooks = withoutOurs(settings, command, client);
+  for (const event of hookedEvents(client)) {
+    if (client === 'cursor') {
+      // Cursor lets a call through when a hook crashes, unless told otherwise.
+      const entry = event === 'preToolUse' && args.monitor !== true ? { command, timeout: 30, failClosed: true } : { command, timeout: 30 };
+      hooks[event] = [...(hooks[event] ?? []), entry];
+      continue;
+    }
     const entry = { type: 'command', command, timeout: 30 };
     hooks[event] = [...(hooks[event] ?? []), TOOL_EVENTS.has(event) ? { matcher: '*', hooks: [entry] } : { hooks: [entry] }];
   }
+  const next = client === 'cursor' ? { version: 1, ...settings, hooks } : { ...settings, hooks };
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ ...settings, hooks }, null, 2) + '\n');
+  fs.writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
 
-  ok(`Claude Code will run ${c.cyan(command)} around every tool call`);
+  ok(`${label} will run ${c.cyan(command)} around every tool call`);
   info(`settings: ${file}`);
-  info('It takes effect in the next Claude Code session.');
+  info(`It takes effect in the next ${label} session.`);
+  if (client === 'codex') info('Codex asks you to review and trust new hooks before it runs them.');
+  if (client === 'cursor') info('Cursor hooks need a recent Cursor (one with preToolUse and postToolUse).');
   out('');
   out(`  ${c.bold('Next')}`);
   out(`    ${c.cyan('vw policy template coding-agent shell-safety secrets --out vouchwell.policy.json')}`);
@@ -325,15 +468,16 @@ function install(args) {
 
 /** @param {any} args */
 function uninstall(args) {
-  const file = settingsPath(args);
-  const command = hookCommand(args);
+  const client = clientOf(args);
+  const file = settingsPath(args, client);
+  const command = hookCommand(args, client);
   // No settings file: nothing was installed, and nothing is created.
   if (readIfPresent(file) === null) {
     ok(`${file} does not exist; nothing to remove`);
     return 0;
   }
   const settings = readSettings(file);
-  const hooks = withoutOurs(settings, command);
+  const hooks = withoutOurs(settings, command, client);
   const next = { ...settings, hooks };
   if (Object.keys(hooks).length === 0) delete next.hooks;
   fs.writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
@@ -403,8 +547,18 @@ function historyWindow(policy) {
   return windows.length ? Math.max(...windows) : 0;
 }
 
-/** @param {'deny'|'ask'} decision @param {string} reason */
-function respond(decision, reason) {
+/**
+ * Tell the client to refuse the call, or to ask its user, in its own words.
+ *
+ * @param {string} client
+ * @param {'deny'|'ask'} decision
+ * @param {string} reason
+ */
+function respond(client, decision, reason) {
+  if (client === 'cursor') {
+    out(JSON.stringify({ permission: decision, user_message: reason, agent_message: reason }));
+    return;
+  }
   out(JSON.stringify({
     hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: decision, permissionDecisionReason: reason },
   }));

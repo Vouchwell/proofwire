@@ -1,11 +1,16 @@
-# Coding agents: record and gate Claude Code's own tools
+# Coding agents: record and gate Claude Code, Codex and Cursor
 
 `vw proxy` sees the MCP servers an agent calls. A coding agent does most of its
 work without them: it runs shell commands, reads and edits files, and fetches
-pages with tools built into the agent. `vw hook` covers those. Claude Code runs
-a command before and after every tool call (its
-[hooks](https://docs.claude.com/en/docs/claude-code/hooks)), and `vw hook` is
-that command.
+pages with tools built into the agent. `vw hook` covers those. Claude Code,
+OpenAI's Codex CLI and Cursor each run a command before and after every tool
+call (their hooks), and `vw hook` is that command.
+
+| Agent | Set up | Can ask a person? |
+|---|---|---|
+| Claude Code | the plugin (below), or `vw hook install` | yes |
+| Codex CLI | `vw hook install --client codex` | no: an escalation is refused, with the reason |
+| Cursor | `vw hook install --client cursor` | yes |
 
 ## The Claude Code plugin
 
@@ -37,9 +42,11 @@ not whatever `vw` is on your PATH. From then on, every tool call goes through
 - **Fails closed when enforcing.** If the CLI isn't installed yet, for
   example with no network at session start, calls are refused with a reason
   telling you to restart or switch to `monitor`.
-- **Asking about the log.** The plugin's skill answers questions like "what
-  did you do?", "prove the log is intact" and "export the evidence", using
-  read-only commands.
+- **Asking about the log.** The plugin runs `vw mcp` as an MCP server, so
+  Claude Code has native tools: `log_entries`, `verify_log`, `log_stats`,
+  `check_bundle` and `export_evidence`. None can change the log. Its skill
+  uses them for questions like "what did you do?", "prove the log is intact"
+  and "export the evidence".
 
 ## The CLI, per project
 
@@ -53,6 +60,37 @@ The hooks load when a Claude Code session starts. From then on every tool call
 is checked against `vouchwell.policy.json` and recorded in `.vouchwell/`. Use
 `vw log` to see what the agent did and `vw verify` to prove nothing has been
 removed.
+
+## Codex CLI and Cursor
+
+```bash
+npm install -g vouchwell
+vw policy template coding-agent shell-safety secrets --out vouchwell.policy.json
+vw hook install --client codex     # this project: .codex/hooks.json  (--user: ~/.codex/hooks.json)
+vw hook install --client cursor    # this project: .cursor/hooks.json (--user: ~/.cursor/hooks.json)
+```
+
+Both work like Claude Code, with differences that come from each agent:
+
+- **Codex** sends the same events and fields as Claude Code. A Codex hook
+  cannot answer "ask the user", so a call the policy escalates is refused
+  instead, and the reason says a person is needed. Codex has no
+  failure or permission-denied events: a call that never reports back is
+  closed as `not_run` when the session ends. Codex asks you to review and
+  trust new hooks before it runs them. Receipts are named `codex.<tool>`
+  (`codex.Bash`, `codex.apply_patch`, MCP tools by their names).
+- **Cursor** hooks are wired to its general `preToolUse`, `postToolUse`,
+  `postToolUseFailure` and `sessionEnd` events. Cursor also fires
+  shell- and MCP-specific events for the same call, which are deliberately
+  not wired, so nothing is recorded twice. Cursor lets a call through when a
+  hook crashes unless told otherwise, so the installed `preToolUse` hook is
+  marked `failClosed` (except with `--monitor`). Cursor may start hooks from
+  outside the project, so `vw hook` works in the workspace root the event
+  names. Receipts are named `cursor.<tool>`, and each Cursor conversation is
+  a session. It needs a Cursor version with `preToolUse` and `postToolUse`.
+
+Run each agent's hooks with its own `--client`. Without it, events are read
+as Claude Code's.
 
 ## What happens to each call
 
@@ -159,8 +197,10 @@ The bundle holds no payloads and no salts.
   On a 5,000-receipt log a call takes about 100 ms, the same as on an empty
   one. Reading the whole log took 0.5 s. The state file is rebuilt from the
   entries whenever it disagrees with them, and `vw verify` never uses it.
-- **A hook sees what Claude Code reports, and nothing else.** A tool that runs
-  outside Claude Code's tool calls is not recorded. A subprocess started by a
+- **A hook sees what the agent reports, and nothing else.** A tool that runs
+  outside the agent's tool calls is not recorded: Codex hooks cover its
+  shell, `apply_patch` and MCP tools, and some actions in each agent fire no
+  hook at all. A subprocess started by a
   recorded shell command is recorded only as that command.
 - **A pattern list is not a sandbox.** A shell can reach a file by another
   name. What the policy does guarantee is a signed record of every attempt it

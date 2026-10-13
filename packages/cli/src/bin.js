@@ -897,7 +897,7 @@ function cmdHelp() {
   out(`      ${c.grey('--no-remote')}                 record locally only, ignore the hub`);
   out(`      ${c.grey('--monitor')}                   block nothing; record what policy would block`);
   out(`      ${c.grey('--enforce')}                   gate even if the config says "monitor": true`);
-  out(`    ${c.cyan('vw hook install')}                record and gate Claude Code's own tools: shell, edits, reads  ${c.grey('[--user --local --monitor]')}`);
+  out(`    ${c.cyan('vw hook install')}                record and gate a coding agent's own tools: shell, edits, reads  ${c.grey('[--client codex|cursor --user --local --monitor]')}`);
   out(`    ${c.cyan('vw hook evidence [dir]')}         checkpoint, and write the log as a bundle to publish  ${c.grey('[default evidence/]')}`);
   out(`    ${c.cyan('vw mcp')}                         this log as an MCP server: agents read, verify and export it  ${c.grey('[--log --config]')}`);
   out('');
