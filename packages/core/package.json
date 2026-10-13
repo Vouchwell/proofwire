@@ -7,12 +7,12 @@
   "author": "IdeaboticsAI",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vouchwell/vouchwell.git",
+    "url": "git+https://github.com/Vouchwell/vouchwell.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/vouchwell/vouchwell#readme",
+  "homepage": "https://github.com/Vouchwell/vouchwell#readme",
   "bugs": {
-    "url": "https://github.com/vouchwell/vouchwell/issues"
+    "url": "https://github.com/Vouchwell/vouchwell/issues"
   },
   "keywords": [
     "ai-agents",

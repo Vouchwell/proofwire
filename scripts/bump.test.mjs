@@ -82,6 +82,11 @@ test('the release preflight names each kind of mismatch', () => {
   assert.match(problems, /depends on @vouchwell\/core@0\.0\.1/);
   assert.match(problems, /Python SDK/);
 
+  const core = path.join(dir, 'packages/core/package.json');
+  fs.writeFileSync(core, fs.readFileSync(core, 'utf8').replace('github.com/Vouchwell/', 'github.com/vouchwell/'));
+  assert.match(versionProblems(dir).problems.join('\n'), /@vouchwell\/core: repository\.url .* npm would refuse its provenance/,
+    'npm compares the repository URL case-sensitively');
+
   const plugin = path.join(dir, PLUGIN);
   fs.writeFileSync(plugin, fs.readFileSync(plugin, 'utf8').replace(/"version": "[^"]+"/, '"version": "0.0.1"'));
   assert.match(versionProblems(dir).problems.join('\n'), /Claude Code plugin is at 0\.0\.1/);
