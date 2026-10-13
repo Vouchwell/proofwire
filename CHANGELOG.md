@@ -6,6 +6,15 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 ## Unreleased
 
 ### Added
+
+- **`vw mcp`: a log as an MCP server.** Any MCP client can call `log_entries`,
+  `verify_log`, `log_stats`, `check_bundle` and `export_evidence`, so an agent
+  can answer "what did you do?" and "prove it" from the record. Every tool
+  reads the log and none changes it. Export writes a new file inside the
+  working directory and never overwrites one.
+- **An MCP Registry entry** (`server.json`, and `mcpName` in the CLI's
+  package.json), ready to publish after the next release. `npm run bump`
+  keeps its version in step. Steps are in `docs/PUBLISHING.md`.
 - **A Claude Code plugin.** `/plugin marketplace add Vouchwell/vouchwell`, then
   `/plugin install vouchwell@vouchwell`, records and gates every tool call with
   nothing else to install or configure. It installs the CLI of its own version

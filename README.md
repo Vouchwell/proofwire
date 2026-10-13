@@ -487,6 +487,18 @@ signed by a key other than yours:
     log-keys: evidence/log-keys.json   # from `vw keys`
 ```
 
+### Let an agent read its own record
+
+`vw mcp` serves a log as an MCP server. Any MCP client (Claude Code, Claude
+Desktop, Cursor, Codex, and others) can then answer "what did you do?" and
+"prove it" from the record itself. Its tools are `log_entries`, `verify_log`,
+`log_stats`, `check_bundle` and `export_evidence`. Every tool reads; none can
+change the log.
+
+```json
+{ "mcpServers": { "vouchwell": { "command": "npx", "args": ["-y", "vouchwell", "mcp", "--log", "/path/to/.vouchwell"] } } }
+```
+
 ### How this repository was built
 
 An AI agent builds Vouchwell, and this repository records it doing so. Its
