@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { composePolicy } from '@vouchwell/core';
 
 /**
@@ -141,7 +141,7 @@ test('the skill can read the log but not change it', () => {
 });
 
 test('until the pinned CLI is installed, the newest one installed earlier keeps recording', async () => {
-  const { installedCli, cliPath } = await import(LAUNCHER);
+  const { installedCli, cliPath } = await import(pathToFileURL(LAUNCHER).href);
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'vouchwell-plugin-data-'));
   const env = { CLAUDE_PLUGIN_DATA: data };
   assert.equal(installedCli(data, env), null);
