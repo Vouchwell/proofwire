@@ -1,6 +1,6 @@
 {
   "name": "@vouchwell/proxy",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "description": "Drop-in MCP proxy that enforces Vouchwell policy and writes receipts.",
   "license": "Apache-2.0",
@@ -25,7 +25,7 @@
     "src"
   ],
   "dependencies": {
-    "@vouchwell/core": "0.7.0"
+    "@vouchwell/core": "0.8.0"
   },
   "engines": {
     "node": ">=20.11"

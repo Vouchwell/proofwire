@@ -1,7 +1,7 @@
 {
   "name": "vouchwell",
   "displayName": "Vouchwell",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Tamper-evident receipts for every tool call Claude Code makes: shell commands, file reads and edits, web fetches, MCP tools. A policy decides before each call runs; every call leaves a signed, hash-chained receipt anyone can verify offline.",
   "author": {
     "name": "Vouchwell",

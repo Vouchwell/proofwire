@@ -1,6 +1,6 @@
 {
   "name": "vouchwell-monorepo",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "Vouchwell — tamper-evident, independently verifiable receipts for AI agent actions.",

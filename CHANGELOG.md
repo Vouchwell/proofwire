@@ -5,6 +5,14 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 
 ## Unreleased
 
+## 0.8.0 — 2026-10-13
+
+Vouchwell records more coding agents, and its tools come to the agent:
+
+- **Codex CLI and Cursor:** `vw hook install --client codex|cursor`.
+- **The Claude Code plugin's native MCP tools** for showing and proving the log.
+- **The MCP Registry entry publishes itself** with every release.
+
 ### Added
 
 - **`vw hook` for OpenAI's Codex CLI and Cursor.** `vw hook install --client
