@@ -207,21 +207,24 @@ Then the things that are not automatable and are worth doing deliberately:
 
 `server.json` at the repository root is Vouchwell's entry in the official MCP
 Registry (registry.modelcontextprotocol.io). The entry runs `npx vouchwell mcp`.
-The registry accepts it only when two things are true:
-- the npm package of that version carries
-  `"mcpName": "io.github.Vouchwell/vouchwell"`. `packages/cli/package.json` has
-  it from 0.7.0 on, so publish after that release is on npm, not before;
-- whoever publishes can sign in to GitHub as a member of the `Vouchwell`
-  organization.
 
-`npm run bump` moves the versions in `server.json` with everything else. After
-each release:
+**It publishes itself.** After each release, `release.yml` calls
+`.github/workflows/mcp-registry.yml`, which builds the registry's
+`mcp-publisher` from source, signs in with GitHub Actions OIDC, and publishes
+`server.json` from the released tag. GitHub vouches for the workflow, and the
+registry grants it the repository owner's namespace (`io.github.Vouchwell/*`),
+so nobody's login or token is needed. To list a tag that is already released,
+go to **Actions → MCP Registry → Run workflow** and enter the tag.
 
-```bash
-brew install mcp-publisher        # or the binary from the registry's GitHub releases
-mcp-publisher login github         # opens the browser; use an account in the Vouchwell org
-mcp-publisher publish              # reads ./server.json
-```
+The registry accepts an entry only when npm's package of that version carries
+`"mcpName": "io.github.Vouchwell/vouchwell"`, as every release from 0.7.0 on
+does. The workflow checks that first. `npm run bump` moves the versions in
+`server.json` with everything else.
+
+Publishing by hand (`mcp-publisher login github`, then `publish`) also works,
+but only for someone who is an **Owner** of the Vouchwell organization and
+has approved the registry's OAuth app for it. Without both, the registry
+grants only your personal namespace and refuses with a 403.
 
 Directories that mirror the registry (GitHub's MCP listing, PulseMCP and
 others) pick the entry up from there.

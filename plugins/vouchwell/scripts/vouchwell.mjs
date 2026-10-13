@@ -4,6 +4,7 @@
  *
  *   vouchwell.mjs setup     SessionStart: make sure the pinned CLI is installed
  *   vouchwell.mjs hook      every tool event: hand it to `vw hook`
+ *   vouchwell.mjs mcp       the plugin's MCP server: `vw mcp` over this log
  *   vouchwell.mjs <cmd>     run a read-only `vw` command against the plugin's log
  *
  * The plugin carries no copy of Vouchwell itself. It installs the npm package
@@ -89,11 +90,21 @@ export function installedCli(data, env = process.env) {
   return newest ? path.join(data, 'cli', newest, 'node_modules', 'vouchwell', 'src', 'bin.js') : null;
 }
 
+const LOCK_STALE_MS = 200_000; // longer than npm's timeout below
+
+/** Block this process for `ms` without spinning. @param {number} ms */
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
 /**
- * Install vouchwell@<plugin version> into the data directory, once. It goes
- * into a fresh folder that is renamed into place only when npm succeeded, so
- * two sessions starting together, or one killed halfway, never leave a
- * half-installed CLI where a hook will find it.
+ * Install vouchwell@<plugin version> into the data directory, once.
+ *
+ * SessionStart and the MCP server can both find the CLI missing when a session
+ * starts, and two `npm install`s at once can trip over npm's shared cache. So
+ * installing takes a lock (a directory: creating one is atomic everywhere);
+ * whoever waits re-checks afterwards and usually finds the work done. The
+ * install itself goes into a fresh folder renamed into place only when npm
+ * succeeded, so one killed halfway never leaves a half-installed CLI where a
+ * hook will find it.
  *
  * @param {string} data
  */
@@ -102,6 +113,39 @@ export function setup(data, env = process.env) {
   if (fs.existsSync(bin)) return 0;
   if (!/^\d+\.\d+\.\d+$/.test(VERSION)) throw new Error(`plugin version "${VERSION}" is not a release`);
 
+  const lock = path.join(data, 'cli', '.install.lock');
+  fs.mkdirSync(path.dirname(lock), { recursive: true });
+  const deadline = Date.now() + LOCK_STALE_MS;
+  for (;;) {
+    try {
+      fs.mkdirSync(lock);
+      break;
+    } catch (e) {
+      if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EEXIST') throw e;
+      let age = 0;
+      try {
+        age = Date.now() - fs.statSync(lock).mtimeMs;
+      } catch {
+        continue; // released between the two calls: try again at once
+      }
+      if (age > LOCK_STALE_MS) {
+        fs.rmSync(lock, { recursive: true, force: true }); // its holder died
+        continue;
+      }
+      if (Date.now() > deadline) throw new Error('timed out waiting for another session to install the Vouchwell CLI');
+      sleep(250);
+    }
+  }
+  try {
+    if (fs.existsSync(bin)) return 0; // the session we waited for installed it
+    return install(data);
+  } finally {
+    fs.rmSync(lock, { recursive: true, force: true });
+  }
+}
+
+/** The install itself, run only while holding the lock. @param {string} data */
+function install(data) {
   const target = path.join(data, 'cli', VERSION);
   const staging = path.join(data, 'cli', `.installing-${process.pid}-${Date.now()}`);
   fs.mkdirSync(staging, { recursive: true });
@@ -120,7 +164,7 @@ export function setup(data, env = process.env) {
   try {
     fs.renameSync(staging, target);
   } catch {
-    // Another session finished first; theirs is as good as ours.
+    // Left over from an install that died after npm finished; ours is as good.
     fs.rmSync(staging, { recursive: true, force: true });
   }
   // Older versions are no longer referenced by anything.
@@ -195,6 +239,20 @@ export function main(argv, env = process.env) {
     return run.status ?? 0;
   }
 
+  if (cmd === 'mcp') {
+    // Claude Code may start MCP servers before SessionStart has installed the
+    // CLI; install it here too. setup() takes a lock, so the two never run npm
+    // at once, and it reports only on stderr, which MCP leaves free.
+    if (!installedCli(data(), env)) setup(data(), env);
+    const opts = options(env);
+    const bin = installedCli(data(), env);
+    if (!bin) throw new Error('the Vouchwell CLI could not be installed');
+    const project = env.CLAUDE_PROJECT_DIR || process.cwd();
+    const config = path.join(project, 'vouchwell.config.json');
+    const where = fs.existsSync(config) ? ['--config', config] : ['--log', opts.logDir];
+    return spawnSync(process.execPath, [bin, 'mcp', ...where], { cwd: project, stdio: 'inherit' }).status ?? 1;
+  }
+
   if (cmd && READ_ONLY.has(cmd)) {
     const opts = options(env);
     const bin = installedCli(data(), env);
@@ -208,7 +266,7 @@ export function main(argv, env = process.env) {
     return spawnSync(process.execPath, [bin, ...args], { cwd: project, stdio: 'inherit' }).status ?? 1;
   }
 
-  process.stderr.write(`vouchwell: unknown command "${cmd ?? ''}"; use setup, hook, or one of ${[...READ_ONLY].join(', ')}\n`);
+  process.stderr.write(`vouchwell: unknown command "${cmd ?? ''}"; use setup, hook, mcp, or one of ${[...READ_ONLY].join(', ')}\n`);
   return 2;
 }
 

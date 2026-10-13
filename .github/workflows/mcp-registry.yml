@@ -1,0 +1,81 @@
+name: MCP Registry
+
+# Lists Vouchwell in the official MCP Registry (registry.modelcontextprotocol.io)
+# as io.github.Vouchwell/vouchwell, from the server.json of a released tag.
+#
+# No person's login or token is involved: GitHub vouches for this workflow
+# (OIDC), and the registry grants it the namespace of the repository's owner.
+# That avoids the GitHub sign-in route, which also needs the publisher to be an
+# Owner of the organization and the registry's OAuth app approved for it.
+#
+# Runs after each release (called by release.yml), and by hand for a tag that
+# is already released: Actions → MCP Registry → Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'A released tag to list, e.g. v0.7.0'
+        type: string
+        required: true
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-registry
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TAG: ${{ inputs.tag }}
+      # The registry's publisher, built from source at this tag. Go's checksum
+      # database pins exactly what gets built, so no prebuilt binary is trusted.
+      PUBLISHER: github.com/modelcontextprotocol/registry/cmd/publisher@v1.8.1
+      GOTOOLCHAIN: auto
+    steps:
+      - name: The tag is a release tag
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$TAG' is not a release tag like v0.7.0"
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+
+      # The registry checks this too, but a clear message here beats its error.
+      - name: server.json names this release, and npm has it under that name
+        run: |
+          NAME=$(jq -r .name server.json)
+          VERSION=$(jq -r .version server.json)
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "::error::server.json is at $VERSION but the tag is $TAG"
+            exit 1
+          fi
+          CLAIMED=$(npm view "vouchwell@$VERSION" mcpName 2>/dev/null || true)
+          if [ "$CLAIMED" != "$NAME" ]; then
+            echo "::error::npm's vouchwell@$VERSION claims '$CLAIMED' as its mcpName, not '$NAME'. Release it to npm first."
+            exit 1
+          fi
+
+      - name: Build mcp-publisher
+        run: go install "$PUBLISHER"
+
+      - name: Validate, sign in with GitHub OIDC, publish
+        run: |
+          BIN="$(go env GOPATH)/bin/publisher"
+          "$BIN" validate
+          "$BIN" login github-oidc
+          "$BIN" publish

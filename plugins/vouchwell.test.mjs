@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { composePolicy } from '@vouchwell/core';
 
@@ -155,4 +155,50 @@ test('until the pinned CLI is installed, the newest one installed earlier keeps 
   fs.mkdirSync(path.dirname(cliPath(data, env)), { recursive: true });
   fs.writeFileSync(cliPath(data, env), '');
   assert.equal(installedCli(data, env), cliPath(data, env), 'the pinned one wins once present');
+});
+
+test('the plugin starts its MCP server through the launcher', () => {
+  const { mcpServers } = json(path.join(PLUGIN, '.mcp.json'));
+  assert.deepEqual(mcpServers.vouchwell.args, ['${CLAUDE_PLUGIN_ROOT}/scripts/vouchwell.mjs', 'mcp']);
+  assert.equal(mcpServers.vouchwell.env.CLAUDE_PLUGIN_OPTION_LOG_DIR, '${user_config.log_dir}',
+    'MCP servers do not receive plugin options on their own; the log folder is passed explicitly');
+});
+
+test("the MCP server answers over stdio and reads the plugin's log", () => {
+  const box = sandbox();
+  const ls = { tool_name: 'Bash', tool_use_id: 't1', tool_input: { command: 'ls' } };
+  run(box, ['hook'], event('PreToolUse', ls));
+  run(box, ['hook'], event('PostToolUse', { ...ls, tool_response: { stdout: '' } }));
+  const r = run(box, ['mcp'], [
+    { jsonrpc: '2.0', id: 0, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 't', version: '0' } } },
+    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'verify_log', arguments: {} } },
+  ].map((m) => JSON.stringify(m)).join('\n') + '\n');
+  assert.equal(r.code, 0, r.stderr);
+  const [init, verify] = r.stdout.trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(init.result.serverInfo.name, 'vouchwell');
+  assert.equal(verify.result.structuredContent.ok, true);
+  assert.equal(verify.result.structuredContent.entries, 2);
+});
+
+test('a second installer waits for the first instead of running npm alongside it', async () => {
+  const { cliPath } = await import(pathToFileURL(LAUNCHER).href);
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'vouchwell-plugin-lock-'));
+  const lock = path.join(data, 'cli', '.install.lock');
+  fs.mkdirSync(lock, { recursive: true }); // another session is installing
+  const env = { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN, CLAUDE_PLUGIN_DATA: data, VOUCHWELL_PLUGIN_CLI: '', PATH: '' };
+  const waiting = new Promise((resolve) => {
+    const child = spawn(process.execPath, [LAUNCHER, 'setup'], { env, stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    child.stderr.on('data', (c) => { err += c; });
+    child.on('close', (code) => resolve({ code, err }));
+  });
+  await new Promise((r) => setTimeout(r, 600));
+  // The other session finishes: the CLI is in place and the lock released.
+  const bin = cliPath(data, { CLAUDE_PLUGIN_DATA: data });
+  fs.mkdirSync(path.dirname(bin), { recursive: true });
+  fs.writeFileSync(bin, '');
+  fs.rmSync(lock, { recursive: true });
+  const { code, err } = await waiting;
+  assert.equal(code, 0, err);
+  assert.doesNotMatch(err, /installing/, 'it found the finished install and ran no npm of its own (PATH is empty: npm would fail)');
 });

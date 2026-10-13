@@ -459,11 +459,14 @@ through Claude Code's hooks. The quickest way is the plugin, typed in Claude Cod
 /plugin install vouchwell@vouchwell
 ```
 
-Or set it up per project with the CLI:
+Or set it up per project with the CLI, for Claude Code, OpenAI's Codex CLI or
+Cursor:
 
 ```bash
 vw policy template coding-agent shell-safety secrets --out vouchwell.policy.json
-vw hook install
+vw hook install                    # Claude Code
+vw hook install --client codex     # Codex CLI
+vw hook install --client cursor    # Cursor
 ```
 
 From the next session, every tool call is checked against the policy before it

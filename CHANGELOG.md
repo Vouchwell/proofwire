@@ -5,6 +5,26 @@ up to 0.5.0 `proofwire` and `@proof_wire/*` — release together at the same ver
 
 ## Unreleased
 
+### Added
+
+- **`vw hook` for OpenAI's Codex CLI and Cursor.** `vw hook install --client
+  codex` writes `.codex/hooks.json` and `--client cursor` writes
+  `.cursor/hooks.json` (`--user` for the user-wide file). Their events are
+  translated to the same receipts, and refusals and escalations are answered
+  in each agent's own format. Codex hooks cannot ask a person, so an
+  escalation is refused with the reason. Cursor's `preToolUse` hook is
+  installed fail-closed, and its log is kept in the workspace the event
+  names.
+- **The MCP Registry entry publishes itself.** A new workflow,
+  `mcp-registry.yml`, signs in to the registry with GitHub Actions OIDC and
+  publishes `server.json` after every release, so no one's GitHub login or
+  organization role is involved. It can also be run by hand for a tag that is
+  already released.
+- **The Claude Code plugin's MCP tools.** The plugin now runs `vw mcp`, so
+  Claude Code has `log_entries`, `verify_log`, `log_stats`, `check_bundle`
+  and `export_evidence` as native tools. CLI installs started by the session
+  and by the MCP server take a lock, so npm never runs twice at once.
+
 ## 0.7.0 — 2026-10-13
 
 Vouchwell reaches agents where they already are:

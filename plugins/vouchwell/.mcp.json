@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "vouchwell": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/vouchwell.mjs", "mcp"],
+      "env": { "CLAUDE_PLUGIN_OPTION_LOG_DIR": "${user_config.log_dir}" }
+    }
+  }
+}
